@@ -1472,6 +1472,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Название товара *</label>
                             <input type="text" id="product-name" required maxlength="120" minlength="2"
+                                   oninput="generateProductSKU()"
                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
                             <p class="text-xs text-gray-500 mt-1">От 2 до 120 символов</p>
                         </div>
@@ -4624,6 +4625,49 @@ function generateSKU(categoryPrefix = 'ТВР') {
     return `${categoryPrefix}-${timestamp}-${random}`;
 }
 
+// Генерация SKU для формы товара
+function generateProductSKU() {
+    const nameField = document.getElementById('product-name');
+    const skuField = document.getElementById('product-sku');
+    const categoryField = document.getElementById('product-category');
+    
+    if (!nameField || !skuField) return;
+    
+    // Генерируем SKU только если поле названия заполнено и SKU пустое
+    if (nameField.value.trim() && !skuField.value) {
+        let prefix = 'ТВР';
+        
+        // Если выбрана категория, используем её префикс
+        if (categoryField && categoryField.value) {
+            const category = productCategories.find(c => c.id === categoryField.value);
+            if (category && category.prefix) {
+                prefix = category.prefix;
+            }
+        }
+        
+        skuField.value = generateSKU(prefix);
+    }
+}
+
+// Расчёт маржи автоматически
+function calculateMargin() {
+    const costPriceField = document.getElementById('product-cost-price');
+    const salePriceField = document.getElementById('product-sale-price');
+    const marginField = document.getElementById('product-margin');
+    
+    if (!costPriceField || !salePriceField || !marginField) return;
+    
+    const costPrice = parseFloat(costPriceField.value) || 0;
+    const salePrice = parseFloat(salePriceField.value) || 0;
+    
+    if (costPrice > 0 && salePrice > 0) {
+        const margin = ((salePrice - costPrice) / costPrice * 100).toFixed(2);
+        marginField.value = margin;
+    } else {
+        marginField.value = '';
+    }
+}
+
 // Загрузка товаров в таблицу
 function loadProducts() {
     const tbody = document.getElementById('products-table-body');
@@ -4668,7 +4712,8 @@ function loadProducts() {
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${product.price ? product.price.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}
+                    <div class="text-sm font-medium">${product.salePrice ? product.salePrice.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}</div>
+                    ${product.margin ? '<div class="text-xs text-green-600">+' + product.margin + '%</div>' : ''}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
@@ -4732,7 +4777,9 @@ function saveProduct(event) {
         name: document.getElementById('product-name').value.trim(),
         categoryId: document.getElementById('product-category').value,
         unitId: document.getElementById('product-unit').value,
-        price: parseFloat(document.getElementById('product-price').value) || 0,
+        costPrice: parseFloat(document.getElementById('product-cost-price').value) || 0,
+        salePrice: parseFloat(document.getElementById('product-sale-price').value) || 0,
+        margin: parseFloat(document.getElementById('product-margin').value) || 0,
         minStock: parseInt(document.getElementById('product-min-stock').value) || 0,
         maxStock: parseInt(document.getElementById('product-max-stock').value) || 0,
         description: document.getElementById('product-description').value.trim(),
@@ -4744,8 +4791,8 @@ function saveProduct(event) {
     };
 
     // Валидация обязательных полей
-    if (!productData.name || !productData.categoryId || !productData.unitId) {
-        showNotification('Заполните обязательные поля', 'error');
+    if (!productData.name || !productData.categoryId || !productData.unitId || !productData.costPrice || !productData.salePrice) {
+        showNotification('Заполните все обязательные поля (название, категория, единица, себестоимость, цена продажи)', 'error');
         return;
     }
 
@@ -4787,7 +4834,9 @@ function editProduct(productId) {
     document.getElementById('product-name').value = product.name;
     document.getElementById('product-category').value = product.categoryId;
     document.getElementById('product-unit').value = product.unitId;
-    document.getElementById('product-price').value = product.price;
+    document.getElementById('product-cost-price').value = product.costPrice || '';
+    document.getElementById('product-sale-price').value = product.salePrice || '';
+    document.getElementById('product-margin').value = product.margin || '';
     document.getElementById('product-min-stock').value = product.minStock || '';
     document.getElementById('product-max-stock').value = product.maxStock || '';
     document.getElementById('product-description').value = product.description || '';
@@ -4845,13 +4894,32 @@ function loadProductUnitsToSelect() {
 
 // Показ модального окна товара с очисткой формы
 function showProductModal() {
-    document.getElementById('product-form').reset();
+    // Очищаем форму (найдём форму по ближайшему родителю)
+    const form = document.querySelector('#product-modal form');
+    if (form) form.reset();
+    
+    // Очищаем поля вручную
     document.getElementById('product-id').value = '';
     document.getElementById('product-sku').value = '';
+    document.getElementById('product-name').value = '';
+    document.getElementById('product-category').value = '';
+    document.getElementById('product-unit').value = '';
+    document.getElementById('product-cost-price').value = '';
+    document.getElementById('product-sale-price').value = '';
+    document.getElementById('product-margin').value = '';
+    document.getElementById('product-min-stock').value = '';
+    document.getElementById('product-max-stock').value = '';
+    document.getElementById('product-description').value = '';
+    document.getElementById('product-status').value = 'active';
+    document.getElementById('product-barcode').value = '';
+    
     document.getElementById('product-modal-title').textContent = 'Добавить товар';
     
+    // Загружаем селекты
     loadProductCategoriesToSelect();
     loadProductUnitsToSelect();
+    
+    // Показываем модальное окно
     showModal('product-modal', true);
 }
 
@@ -5393,7 +5461,8 @@ function renderFilteredProducts(filteredProducts) {
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${product.price ? product.price.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}
+                    <div class="text-sm font-medium">${product.salePrice ? product.salePrice.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}</div>
+                    ${product.margin ? '<div class="text-xs text-green-600">+' + product.margin + '%</div>' : ''}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
@@ -5527,7 +5596,8 @@ function generateProductsPrintContent() {
                 <td>${product.sku}</td>
                 <td>${product.name}</td>
                 <td>${category ? category.name : 'Без категории'}</td>
-                <td>${product.price ? product.price.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}</td>
+                <td><div class="text-sm font-medium">${product.salePrice ? product.salePrice.toLocaleString('ru-RU') + ' ₽' : 'Не указана'}</div>
+                    ${product.margin ? '<div class="text-xs text-green-600">+' + product.margin + '%</div>' : ''}</td>
                 <td>${totalStock} ${unit ? unit.name : 'шт'}</td>
                 <td>${product.status === 'active' ? 'Активный' : 'Неактивный'}</td>
             </tr>
