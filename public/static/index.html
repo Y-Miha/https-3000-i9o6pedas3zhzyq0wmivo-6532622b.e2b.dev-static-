@@ -5091,10 +5091,18 @@ function deleteProductCategory(categoryId) {
 
 // Показ модального окна категории
 function showProductCategoryModal() {
-    document.getElementById('category-form').reset();
-    document.getElementById('category-id').value = '';
-    document.getElementById('category-modal-title').textContent = 'Добавить категорию';
-    showModal('category-modal', true);
+    console.log('🔧 showProductCategoryModal вызвана');
+    // Очищаем поля
+    const nameField = document.getElementById('new-category-name');
+    const colorField = document.getElementById('new-category-color');
+    
+    if (nameField) nameField.value = '';
+    if (colorField) colorField.value = '#10B981';
+    
+    // Загружаем список категорий
+    loadProductCategories();
+    
+    showModal('product-categories-modal', true);
 }
 
 // ================================
@@ -5228,10 +5236,18 @@ function deleteProductUnit(unitId) {
 
 // Показ модального окна единицы измерения
 function showProductUnitModal() {
-    document.getElementById('unit-form').reset();
-    document.getElementById('unit-id').value = '';
-    document.getElementById('unit-modal-title').textContent = 'Добавить единицу измерения';
-    showModal('unit-modal', true);
+    console.log('🔧 showProductUnitModal вызвана');
+    // Очищаем поля
+    const nameField = document.getElementById('new-unit-name');
+    const codeField = document.getElementById('new-unit-code');
+    
+    if (nameField) nameField.value = '';
+    if (codeField) codeField.value = '';
+    
+    // Загружаем список единиц
+    loadProductUnits();
+    
+    showModal('product-units-modal', true);
 }
 
 // ================================
