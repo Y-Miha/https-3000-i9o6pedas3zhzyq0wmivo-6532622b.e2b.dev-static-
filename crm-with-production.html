@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM "Повар Бим" - Система управления производством</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥘</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        .nav-item:hover {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+        }
+        .table-row:hover {
+            background-color: #f9fafb;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal {
+            display: none;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.show {
+            display: flex !important;
+        }
+        .modal.fixed {
+            position: fixed;
+        }
+        .modal-container {
+            max-height: 95vh;
+            overflow-y: auto;
+            margin: 2.5vh auto;
+        }
+        
+        /* Цветовое кодирование */
+        .badge-physical { @apply bg-blue-100 text-blue-800; }
+        .badge-legal { @apply bg-purple-100 text-purple-800; }
+        .badge-store { @apply bg-green-100 text-green-800; }
+        .badge-wholesale { @apply bg-orange-100 text-orange-800; }
+        .badge-company { @apply bg-gray-100 text-gray-800; }
+        .badge-active { @apply bg-green-100 text-green-800; }
+        .badge-inactive { @apply bg-red-100 text-red-800; }
+        
+        /* Статусы ингредиентов */
+        .status-available { @apply text-green-600; }
+        .status-unavailable { @apply text-red-600; }
+        
+        /* Производственные статусы */
+        .status-draft { @apply bg-gray-100 text-gray-800; }
+        .status-active { @apply bg-blue-100 text-blue-800; }
+        .status-in-production { @apply bg-yellow-100 text-yellow-800; }
+        .status-completed { @apply bg-green-100 text-green-800; }
+        .status-cancelled { @apply bg-red-100 text-red-800; }
+        
+        /* Прогрессбар для производства */
+        .progress-bar {
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #10b981;
+            transition: width 0.3s ease;
+        }
+        
+        /* Выделение активного меню */
+        .nav-item.active {
+            background-color: #fed7aa;
+            color: #ea580c;
+            border-radius: 8px;
+        }
+        
+        /* Стили для конструктора рецептов */
+        .ingredient-row {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+        }
+        .ingredient-row:hover {
+            border-color: #d97706;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        /* Печатные стили */
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { font-size: 12px; }
+            .modal { position: static; background: white; display: block !important; }
+            .modal-container { max-height: none; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Шапка -->
+    <header class="bg-white shadow-sm border-b no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-dog text-2xl text-orange-600 mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-900">CRM "Повар Бим" - Производство</h1>
+                </div>
+                <div class="text-sm text-gray-500">
+                    <span id="current-time"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex min-h-screen">
+        <!-- Боковая панель -->
+        <aside class="w-64 bg-white shadow-sm border-r no-print">
+            <nav class="mt-5 px-2">
+                <a href="#" onclick="showSection('dashboard')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-chart-bar text-gray-400 mr-3 text-lg"></i>
+                    Дашборд
+                </a>
+                
+                <a href="#" onclick="showSection('customers')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-users text-gray-400 mr-3 text-lg"></i>
+                    Клиенты
+                </a>
+                
+                <a href="#" onclick="showSection('products')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-box text-gray-400 mr-3 text-lg"></i>
+                    Товары
+                </a>
+                
+                <a href="#" onclick="showSection('orders')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-shopping-cart text-gray-400 mr-3 text-lg"></i>
+                    Заказы
+                </a>
+
+                <!-- НОВЫЕ ПРОИЗВОДСТВЕННЫЕ МОДУЛИ -->
+                <div class="mt-6 border-t pt-6">
+                    <h3 class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                        <i class="fas fa-industry mr-2"></i>
+                        Производство
+                    </h3>
+                    
+                    <a href="#" onclick="showSection('ingredients')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-seedling text-gray-400 mr-3 text-lg"></i>
+                        Ингредиенты
+                    </a>
+                    
+                    <a href="#" onclick="showSection('recipes')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-clipboard-list text-gray-400 mr-3 text-lg"></i>
+                        Рецепты
+                    </a>
+                    
+                    <a href="#" onclick="showSection('production')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-cogs text-gray-400 mr-3 text-lg"></i>
+                        Производство
+                    </a>
+                    
+                    <a href="#" onclick="showSection('packaging')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-boxes text-gray-400 mr-3 text-lg"></i>
+                        Упаковка
+                    </a>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                        Быстрые действия
+                    </h3>
+                    
+                    <button onclick="showSection('recipes'); showModal('recipe-modal')" 
+                            class="w-full nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-plus-circle text-gray-400 mr-3 text-lg"></i>
+                        Новый рецепт
+                    </button>
+                    
+                    <button onclick="showSection('production'); showModal('production-task-modal')" 
+                            class="w-full nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-play-circle text-gray-400 mr-3 text-lg"></i>
+                        Запустить производство
+                    </button>
+                    
+                    <button onclick="showSection('customers'); showModal('customer-modal')" 
+                            class="w-full nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                        <i class="fas fa-user-plus text-gray-400 mr-3 text-lg"></i>
+                        Добавить клиента
+                    </button>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="flex-1 relative z-0 overflow-y-auto focus:outline-none">
+            <!-- Дашборд -->
+            <section id="dashboard-section" class="section">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <i class="fas fa-tachometer-alt text-orange-600 mr-3"></i>
+                                Производственный дашборд
+                            </h2>
+                        </div>
+
+                        <!-- Статистика -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-users text-2xl text-orange-500"></i>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">Клиенты</dt>
+                                                <dd class="text-lg font-medium text-gray-900" id="total-customers">0</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-clipboard-list text-2xl text-blue-500"></i>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">Рецепты</dt>
+                                                <dd class="text-lg font-medium text-gray-900" id="total-recipes">0</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-cogs text-2xl text-green-500"></i>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">В производстве</dt>
+                                                <dd class="text-lg font-medium text-gray-900" id="active-production">0</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-seedling text-2xl text-purple-500"></i>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">Ингредиенты</dt>
+                                                <dd class="text-lg font-medium text-gray-900" id="total-ingredients">0</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white overflow-hidden shadow rounded-lg">
+                                <div class="p-5">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-ruble-sign text-2xl text-indigo-500"></i>
+                                        </div>
+                                        <div class="ml-5 w-0 flex-1">
+                                            <dl>
+                                                <dt class="text-sm font-medium text-gray-500 truncate">Выручка</dt>
+                                                <dd class="text-lg font-medium text-gray-900" id="monthly-revenue">0 ₽</dd>
+                                            </dl>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Быстрый доступ к производству -->
+                        <div class="bg-white shadow rounded-lg p-6 mb-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">
+                                <i class="fas fa-bolt text-orange-600 mr-2"></i>
+                                Быстрые действия производства
+                            </h3>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <button onclick="showSection('recipes'); showModal('recipe-modal')"
+                                        class="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition-colors">
+                                    <i class="fas fa-plus-circle text-orange-600 text-2xl mb-2"></i>
+                                    <span class="text-sm font-medium text-center">Создать рецепт</span>
+                                </button>
+                                
+                                <button onclick="showSection('production'); showModal('production-task-modal')"
+                                        class="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors">
+                                    <i class="fas fa-play-circle text-blue-600 text-2xl mb-2"></i>
+                                    <span class="text-sm font-medium text-center">Запуск производства</span>
+                                </button>
+                                
+                                <button onclick="showSection('ingredients'); showModal('ingredient-modal')"
+                                        class="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors">
+                                    <i class="fas fa-seedling text-green-600 text-2xl mb-2"></i>
+                                    <span class="text-sm font-medium text-center">Добавить ингредиент</span>
+                                </button>
+                                
+                                <button onclick="showSection('packaging'); showModal('packaging-modal')"
+                                        class="flex flex-col items-center p-4 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-colors">
+                                    <i class="fas fa-boxes text-purple-600 text-2xl mb-2"></i>
+                                    <span class="text-sm font-medium text-center">Управление упаковкой</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Активные производственные задания -->
+                        <div class="bg-white shadow rounded-lg p-6">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">
+                                <i class="fas fa-tasks text-blue-600 mr-2"></i>
+                                Активные производственные задания
+                            </h3>
+                            <div id="active-production-tasks" class="space-y-4">
+                                <div class="text-gray-500 text-center py-8">
+                                    <i class="fas fa-clipboard-check text-4xl mb-3"></i>
+                                    <p>Нет активных производственных заданий</p>
+                                    <button onclick="showSection('production'); showModal('production-task-modal')" 
+                                            class="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700">
+                                        <i class="fas fa-plus mr-2"></i>
+                                        Создать задание
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- МОДУЛЬ ИНГРЕДИЕНТЫ -->
+            <section id="ingredients-section" class="section hidden">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <i class="fas fa-seedling text-green-600 mr-3"></i>
+                                Управление ингредиентами
+                            </h2>
+                            <button onclick="showModal('ingredient-modal')" 
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                                <i class="fas fa-plus mr-2"></i>
+                                Добавить ингредиент
+                            </button>
+                        </div>
+
+                        <!-- Фильтры ингредиентов -->
+                        <div class="bg-white shadow rounded-lg p-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
+                                    <input type="text" id="ingredient-search" placeholder="Название ингредиента" onkeyup="filterIngredients()"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Категория</label>
+                                    <select id="ingredient-category-filter" onchange="filterIngredients()"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                        <option value="">Все категории</option>
+                                        <option value="мясо">Мясо и птица</option>
+                                        <option value="рыба">Рыба и морепродукты</option>
+                                        <option value="крупы">Крупы и злаки</option>
+                                        <option value="овощи">Овощи</option>
+                                        <option value="витамины">Витамины и минералы</option>
+                                        <option value="другое">Другое</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Наличие на складе</label>
+                                    <select id="ingredient-availability-filter" onchange="filterIngredients()"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                        <option value="">Все</option>
+                                        <option value="available">Есть на складе</option>
+                                        <option value="low">Заканчивается</option>
+                                        <option value="unavailable">Нет на складе</option>
+                                    </select>
+                                </div>
+                                <div class="flex items-end">
+                                    <button onclick="clearIngredientFilters()" 
+                                            class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                                        Сбросить фильтры
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Таблица ингредиентов -->
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Ингредиент
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Категория
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Остаток на складе
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Цена за кг
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Статус
+                                        </th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Действия
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ingredients-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Данные будут загружены динамически -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- МОДУЛЬ РЕЦЕПТЫ -->
+            <section id="recipes-section" class="section hidden">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <i class="fas fa-clipboard-list text-blue-600 mr-3"></i>
+                                База рецептов каш "Повар Бим"
+                            </h2>
+                            <button onclick="showModal('recipe-modal')" 
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                <i class="fas fa-plus mr-2"></i>
+                                Создать рецепт
+                            </button>
+                        </div>
+
+                        <!-- Карточки рецептов -->
+                        <div id="recipes-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <!-- Рецепты будут загружены динамически -->
+                        </div>
+
+                        <!-- Пустое состояние -->
+                        <div id="recipes-empty" class="text-center py-12 hidden">
+                            <i class="fas fa-clipboard-list text-4xl text-gray-400 mb-4"></i>
+                            <h3 class="text-lg font-medium text-gray-900 mb-2">Нет созданных рецептов</h3>
+                            <p class="text-gray-500 mb-6">Создайте первый рецепт каши для производства</p>
+                            <button onclick="showModal('recipe-modal')" 
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                <i class="fas fa-plus mr-2"></i>
+                                Создать первый рецепт
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- МОДУЛЬ ПРОИЗВОДСТВО -->
+            <section id="production-section" class="section hidden">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <i class="fas fa-cogs text-orange-600 mr-3"></i>
+                                Производственные задания
+                            </h2>
+                            <button onclick="showModal('production-task-modal')" 
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700">
+                                <i class="fas fa-play-circle mr-2"></i>
+                                Запустить производство
+                            </button>
+                        </div>
+
+                        <!-- Фильтры производственных заданий -->
+                        <div class="bg-white shadow rounded-lg p-4 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Поиск</label>
+                                    <input type="text" id="production-search" placeholder="Номер партии или рецепт" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Статус</label>
+                                    <select id="production-status-filter" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                                        <option value="">Все статусы</option>
+                                        <option value="draft">Черновик</option>
+                                        <option value="active">Активное</option>
+                                        <option value="in-production">В производстве</option>
+                                        <option value="completed">Завершено</option>
+                                        <option value="cancelled">Отменено</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Рецепт</label>
+                                    <select id="production-recipe-filter" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                                        <option value="">Все рецепты</option>
+                                        <!-- Рецепты загружаются динамически -->
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Дата</label>
+                                    <input type="date" id="production-date-filter" 
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                                </div>
+                                <div class="flex items-end">
+                                    <button onclick="clearProductionFilters()" 
+                                            class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">
+                                        Сбросить
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Таблица производственных заданий -->
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Партия / Рецепт
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Объем (кг)
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Дата производства
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Себестоимость
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Статус
+                                        </th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Действия
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="production-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Данные будут загружены динамически -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- МОДУЛЬ УПАКОВКА -->
+            <section id="packaging-section" class="section hidden">
+                <div class="py-6">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-bold text-gray-900">
+                                <i class="fas fa-boxes text-purple-600 mr-3"></i>
+                                Упаковка и расходные материалы
+                            </h2>
+                            <button onclick="showModal('packaging-modal')" 
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700">
+                                <i class="fas fa-plus mr-2"></i>
+                                Добавить материал
+                            </button>
+                        </div>
+
+                        <!-- Таблица упаковочных материалов -->
+                        <div class="bg-white shadow rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Материал
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Тип
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Остаток
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Цена за единицу
+                                        </th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Действия
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="packaging-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Данные будут загружены динамически -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- МОДАЛЬНЫЕ ОКНА -->
+
+    <!-- Модальное окно ингредиента -->
+    <div id="ingredient-modal" class="modal fixed inset-0 z-50 items-center justify-center">
+        <div class="modal-container bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-seedling text-green-600 mr-2"></i>
+                    <span id="ingredient-modal-title">Добавить ингредиент</span>
+                </h3>
+                <button onclick="hideModal('ingredient-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="ingredient-form" onsubmit="saveIngredient(event)">
+                <input type="hidden" id="ingredient-id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Название ингредиента *</label>
+                        <input type="text" id="ingredient-name" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Категория *</label>
+                        <select id="ingredient-category" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                            <option value="">Выберите категорию</option>
+                            <option value="мясо">Мясо и птица</option>
+                            <option value="рыба">Рыба и морепродукты</option>
+                            <option value="крупы">Крупы и злаки</option>
+                            <option value="овощи">Овощи</option>
+                            <option value="витамины">Витамины и минералы</option>
+                            <option value="другое">Другое</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Количество на складе (кг) *</label>
+                        <input type="number" id="ingredient-stock" step="0.01" min="0" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Цена за кг (₽) *</label>
+                        <input type="number" id="ingredient-price" step="0.01" min="0" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Минимальный остаток (кг)</label>
+                        <input type="number" id="ingredient-min-stock" step="0.01" min="0"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Поставщик</label>
+                        <input type="text" id="ingredient-supplier"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Описание</label>
+                    <textarea id="ingredient-description" rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"></textarea>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                    <button type="button" onclick="hideModal('ingredient-modal')" 
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        Отмена
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-md">
+                        <i class="fas fa-save mr-2"></i>
+                        Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно рецепта -->
+    <div id="recipe-modal" class="modal fixed inset-0 z-50 items-center justify-center">
+        <div class="modal-container bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-clipboard-list text-blue-600 mr-2"></i>
+                    <span id="recipe-modal-title">Создать новый рецепт</span>
+                </h3>
+                <button onclick="hideModal('recipe-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="recipe-form" onsubmit="saveRecipe(event)">
+                <input type="hidden" id="recipe-id">
+                
+                <!-- Основная информация о рецепте -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Название рецепта *</label>
+                        <input type="text" id="recipe-name" required placeholder="например: Каша 'Говядина'"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Категория каши *</label>
+                        <select id="recipe-category" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Выберите категорию</option>
+                            <option value="говядина">Говядина</option>
+                            <option value="курица">Курица</option>
+                            <option value="лосось">Лосось</option>
+                            <option value="лайт">Лайт (диетическая)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Описание рецепта</label>
+                    <textarea id="recipe-description" rows="2" 
+                              placeholder="Краткое описание состава и особенностей рецепта"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                </div>
+
+                <!-- Конструктор рецепта -->
+                <div class="border border-gray-300 rounded-lg p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-md font-medium text-gray-900">
+                            <i class="fas fa-flask text-blue-600 mr-2"></i>
+                            Состав рецепта (на 1 кг)
+                        </h4>
+                        <button type="button" onclick="addIngredientToRecipe()" 
+                                class="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            <i class="fas fa-plus mr-1"></i>
+                            Добавить ингредиент
+                        </button>
+                    </div>
+
+                    <div id="recipe-ingredients" class="space-y-3">
+                        <!-- Ингредиенты рецепта будут добавляться динамически -->
+                    </div>
+
+                    <!-- Итоговая информация -->
+                    <div class="mt-4 pt-4 border-t border-gray-200 bg-gray-50 p-3 rounded-md">
+                        <div class="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <span class="font-medium text-gray-600">Общий вес:</span>
+                                <span id="recipe-total-weight" class="ml-2 font-bold text-gray-900">0 г</span>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-600">Себестоимость:</span>
+                                <span id="recipe-total-cost" class="ml-2 font-bold text-green-600">0 ₽</span>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-600">Цена за 1 кг:</span>
+                                <span id="recipe-cost-per-kg" class="ml-2 font-bold text-blue-600">0 ₽</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button type="button" onclick="hideModal('recipe-modal')" 
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        Отмена
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                        <i class="fas fa-save mr-2"></i>
+                        Сохранить рецепт
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно производственного задания -->
+    <div id="production-task-modal" class="modal fixed inset-0 z-50 items-center justify-center">
+        <div class="modal-container bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-play-circle text-orange-600 mr-2"></i>
+                    <span id="production-task-modal-title">Создать производственное задание</span>
+                </h3>
+                <button onclick="hideModal('production-task-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="production-task-form" onsubmit="saveProductionTask(event)">
+                <input type="hidden" id="production-task-id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Выберите рецепт *</label>
+                        <select id="production-recipe-select" required onchange="updateProductionCalculations()"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                            <option value="">Выберите рецепт из базы</option>
+                            <!-- Рецепты загружаются динамически -->
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Объем партии (кг) *</label>
+                        <input type="number" id="production-batch-size" step="0.1" min="0.1" required onchange="updateProductionCalculations()"
+                               placeholder="например: 50"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Дата производства *</label>
+                        <input type="date" id="production-date" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Номер партии</label>
+                        <div class="flex">
+                            <input type="text" id="production-batch-number" 
+                                   class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                            <button type="button" onclick="generateBatchNumber()" 
+                                    class="px-3 py-2 bg-orange-600 text-white rounded-r-lg hover:bg-orange-700">
+                                <i class="fas fa-magic"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Оставьте пустым для автогенерации</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button type="button" onclick="hideModal('production-task-modal')" 
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        Отмена
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md">
+                        <i class="fas fa-play mr-2"></i>
+                        Запустить в производство
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно упаковочного материала -->
+    <div id="packaging-modal" class="modal fixed inset-0 z-50 items-center justify-center">
+        <div class="modal-container bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-boxes text-purple-600 mr-2"></i>
+                    <span id="packaging-modal-title">Добавить упаковочный материал</span>
+                </h3>
+                <button onclick="hideModal('packaging-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="packaging-form" onsubmit="savePackaging(event)">
+                <input type="hidden" id="packaging-id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Название материала *</label>
+                        <input type="text" id="packaging-name" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Тип материала *</label>
+                        <select id="packaging-type" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">Выберите тип</option>
+                            <option value="пакеты">Пакеты</option>
+                            <option value="коробки">Коробки</option>
+                            <option value="этикетки">Этикетки</option>
+                            <option value="пленка">Пленка</option>
+                            <option value="другое">Другое</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Остаток (шт) *</label>
+                        <input type="number" id="packaging-stock" min="0" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Цена за единицу (₽) *</label>
+                        <input type="number" id="packaging-price" step="0.01" min="0" required
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                    <button type="button" onclick="hideModal('packaging-modal')" 
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                        Отмена
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md">
+                        <i class="fas fa-save mr-2"></i>
+                        Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript функционал встроен в HTML -->
+    <script>
+// JavaScript функционал для CRM "Повар Бим" - Производство
+
+// Глобальные переменные для хранения данных
+let ingredients = [];
+let recipes = [];
+let productionTasks = [];
+let packagingMaterials = [];
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadSampleData();
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    showSection('dashboard');
+    updateDashboardStats();
+});
+
+// Обновление времени
+function updateCurrentTime() {
+    const now = new Date();
+    const timeElement = document.getElementById('current-time');
+    if (timeElement) {
+        timeElement.textContent = now.toLocaleString('ru-RU');
+    }
+}
+
+// Функции управления разделами
+function showSection(sectionName) {
+    // Скрыть все секции
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.add('hidden');
+    });
+
+    // Показать выбранную секцию
+    const targetSection = document.getElementById(sectionName + '-section');
+    if (targetSection) {
+        targetSection.classList.remove('hidden');
+        targetSection.classList.add('fade-in');
+    }
+
+    // Обновить активный элемент меню
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    const activeMenuItem = document.querySelector(`[onclick*="${sectionName}"]`);
+    if (activeMenuItem) {
+        activeMenuItem.classList.add('active');
+    }
+
+    // Загрузить данные для секции
+    switch (sectionName) {
+        case 'ingredients':
+            loadIngredients();
+            break;
+        case 'recipes':
+            loadRecipes();
+            break;
+        case 'production':
+            loadProductionTasks();
+            break;
+        case 'packaging':
+            loadPackagingMaterials();
+            break;
+        case 'dashboard':
+            updateDashboardStats();
+            break;
+    }
+}
+
+// Функции управления модальными окнами
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('show');
+        
+        // Сброс формы при открытии модального окна
+        const form = modal.querySelector('form');
+        if (form) {
+            form.reset();
+            // Очистка скрытых полей ID
+            const idField = form.querySelector('input[type="hidden"]');
+            if (idField) idField.value = '';
+        }
+
+        // Специфическая инициализация для разных модальных окон
+        if (modalId === 'recipe-modal') {
+            clearRecipeIngredients();
+        }
+        if (modalId === 'production-task-modal') {
+            loadRecipesForProduction();
+            setDefaultProductionDate();
+        }
+    }
+}
+
+function hideModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// УПРАВЛЕНИЕ ДАННЫМИ
+function saveDataToStorage() {
+    try {
+        localStorage.setItem('povoarBimIngredients', JSON.stringify(ingredients));
+        localStorage.setItem('povoarBimRecipes', JSON.stringify(recipes));
+        localStorage.setItem('povoarBimProductionTasks', JSON.stringify(productionTasks));
+        localStorage.setItem('povoarBimPackagingMaterials', JSON.stringify(packagingMaterials));
+    } catch (e) {
+        console.error('Error saving to localStorage:', e);
+    }
+}
+
+function loadDataFromStorage() {
+    try {
+        const storedIngredients = localStorage.getItem('povoarBimIngredients');
+        const storedRecipes = localStorage.getItem('povoarBimRecipes');
+        const storedTasks = localStorage.getItem('povoarBimProductionTasks');
+        const storedPackaging = localStorage.getItem('povoarBimPackagingMaterials');
+
+        if (storedIngredients) ingredients = JSON.parse(storedIngredients);
+        if (storedRecipes) recipes = JSON.parse(storedRecipes);
+        if (storedTasks) productionTasks = JSON.parse(storedTasks);
+        if (storedPackaging) packagingMaterials = JSON.parse(storedPackaging);
+    } catch (e) {
+        console.error('Error loading from localStorage:', e);
+    }
+}
+
+function loadSampleData() {
+    // Загрузить данные из localStorage
+    loadDataFromStorage();
+
+    // Если нет данных, создать примеры
+    if (ingredients.length === 0) {
+        ingredients = [
+            {
+                id: '1',
+                name: 'Говядина (фарш)',
+                category: 'мясо',
+                stock: 25.5,
+                price: 450,
+                minStock: 5,
+                supplier: 'Мясокомбинат "Премиум"',
+                description: 'Свежий говяжий фарш высшего сорта',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '2',
+                name: 'Куриная грудка (рубленая)',
+                category: 'мясо',
+                stock: 18.2,
+                price: 320,
+                minStock: 3,
+                supplier: 'Птицефабрика "Здоровье"',
+                description: 'Диетическое куриное мясо без кожи',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '3',
+                name: 'Филе лосося',
+                category: 'рыба',
+                stock: 12.8,
+                price: 850,
+                minStock: 2,
+                supplier: 'Рыбный дом "Океан"',
+                description: 'Свежее филе атлантического лосося',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '4',
+                name: 'Рис бурый',
+                category: 'крупы',
+                stock: 45.0,
+                price: 80,
+                minStock: 10,
+                supplier: 'ООО "Здоровые злаки"',
+                description: 'Цельнозерновой бурый рис, богатый клетчаткой',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '5',
+                name: 'Морковь сушеная',
+                category: 'овощи',
+                stock: 8.5,
+                price: 120,
+                minStock: 2,
+                supplier: 'Эко-Продукт',
+                description: 'Натуральная сушеная морковь без добавок',
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: '6',
+                name: 'Витаминно-минеральный комплекс',
+                category: 'витамины',
+                stock: 3.2,
+                price: 1200,
+                minStock: 0.5,
+                supplier: 'ВетФарм',
+                description: 'Сбалансированный комплекс витаминов и минералов для собак',
+                createdAt: new Date().toISOString()
+            }
+        ];
+        saveDataToStorage();
+    }
+}
+
+// ОБНОВЛЕНИЕ СТАТИСТИКИ ДАШБОРДА
+function updateDashboardStats() {
+    const totalCustomersEl = document.getElementById('total-customers');
+    const totalRecipesEl = document.getElementById('total-recipes');
+    const activeProductionEl = document.getElementById('active-production');
+    const totalIngredientsEl = document.getElementById('total-ingredients');
+    
+    if (totalCustomersEl) totalCustomersEl.textContent = '0';
+    if (totalRecipesEl) totalRecipesEl.textContent = recipes.length;
+    if (activeProductionEl) {
+        activeProductionEl.textContent = productionTasks.filter(task => 
+            task.status === 'in-production' || task.status === 'active'
+        ).length;
+    }
+    if (totalIngredientsEl) totalIngredientsEl.textContent = ingredients.length;
+}
+
+// УПРАВЛЕНИЕ ИНГРЕДИЕНТАМИ
+function saveIngredient(event) {
+    event.preventDefault();
+
+    const formData = {
+        id: document.getElementById('ingredient-id').value || Date.now().toString(),
+        name: document.getElementById('ingredient-name').value,
+        category: document.getElementById('ingredient-category').value,
+        stock: parseFloat(document.getElementById('ingredient-stock').value),
+        price: parseFloat(document.getElementById('ingredient-price').value),
+        minStock: parseFloat(document.getElementById('ingredient-min-stock').value) || 0,
+        supplier: document.getElementById('ingredient-supplier').value,
+        description: document.getElementById('ingredient-description').value,
+        createdAt: new Date().toISOString()
+    };
+
+    // Проверка на существующий ингредиент
+    const existingIndex = ingredients.findIndex(ing => ing.id === formData.id);
+    if (existingIndex >= 0) {
+        ingredients[existingIndex] = formData;
+    } else {
+        ingredients.push(formData);
+    }
+
+    saveDataToStorage();
+    hideModal('ingredient-modal');
+    loadIngredients();
+    updateDashboardStats();
+
+    showNotification('Ингредиент успешно сохранен', 'success');
+}
+
+function loadIngredients() {
+    const tbody = document.getElementById('ingredients-table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (ingredients.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                    <i class="fas fa-seedling text-4xl mb-3"></i>
+                    <p>Нет добавленных ингредиентов</p>
+                    <button onclick="showModal('ingredient-modal')" 
+                            class="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                        <i class="fas fa-plus mr-2"></i>
+                        Добавить первый ингредиент
+                    </button>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    ingredients.forEach(ingredient => {
+        const status = getIngredientStatus(ingredient);
+        const row = `
+            <tr class="table-row">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">${ingredient.name}</div>
+                    <div class="text-sm text-gray-500">${ingredient.description || ''}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        ${ingredient.category}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">${ingredient.stock} кг</div>
+                    ${ingredient.minStock > 0 ? `<div class="text-xs text-gray-500">Мин: ${ingredient.minStock} кг</div>` : ''}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${ingredient.price.toFixed(2)} ₽
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center ${status.class}">
+                        <i class="fas ${status.icon} mr-1"></i>
+                        ${status.text}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button onclick="editIngredient('${ingredient.id}')" 
+                            class="text-blue-600 hover:text-blue-900 mr-3">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteIngredient('${ingredient.id}')" 
+                            class="text-red-600 hover:text-red-900">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}
+
+function getIngredientStatus(ingredient) {
+    if (ingredient.stock <= 0) {
+        return {
+            class: 'status-unavailable',
+            icon: 'fa-times-circle',
+            text: 'Нет на складе'
+        };
+    } else if (ingredient.minStock > 0 && ingredient.stock <= ingredient.minStock) {
+        return {
+            class: 'text-yellow-600',
+            icon: 'fa-exclamation-triangle',
+            text: 'Заканчивается'
+        };
+    } else {
+        return {
+            class: 'status-available',
+            icon: 'fa-check-circle',
+            text: 'Есть на складе'
+        };
+    }
+}
+
+function editIngredient(id) {
+    const ingredient = ingredients.find(ing => ing.id === id);
+    if (!ingredient) return;
+
+    document.getElementById('ingredient-id').value = ingredient.id;
+    document.getElementById('ingredient-name').value = ingredient.name;
+    document.getElementById('ingredient-category').value = ingredient.category;
+    document.getElementById('ingredient-stock').value = ingredient.stock;
+    document.getElementById('ingredient-price').value = ingredient.price;
+    document.getElementById('ingredient-min-stock').value = ingredient.minStock;
+    document.getElementById('ingredient-supplier').value = ingredient.supplier || '';
+    document.getElementById('ingredient-description').value = ingredient.description || '';
+
+    document.getElementById('ingredient-modal-title').textContent = 'Редактировать ингредиент';
+    showModal('ingredient-modal');
+}
+
+function deleteIngredient(id) {
+    if (confirm('Вы уверены, что хотите удалить этот ингредиент?')) {
+        ingredients = ingredients.filter(ing => ing.id !== id);
+        saveDataToStorage();
+        loadIngredients();
+        updateDashboardStats();
+        showNotification('Ингредиент удален', 'success');
+    }
+}
+
+// УПРАВЛЕНИЕ РЕЦЕПТАМИ  
+function loadRecipes() {
+    const grid = document.getElementById('recipes-grid');
+    const empty = document.getElementById('recipes-empty');
+
+    if (!grid || !empty) return;
+
+    if (recipes.length === 0) {
+        grid.style.display = 'none';
+        empty.classList.remove('hidden');
+        return;
+    }
+
+    empty.classList.add('hidden');
+    grid.style.display = 'grid';
+    grid.innerHTML = '';
+
+    recipes.forEach(recipe => {
+        const card = `
+            <div class="bg-white overflow-hidden shadow rounded-lg hover:shadow-lg transition-shadow">
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-medium text-gray-900">${recipe.name}</h3>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            ${recipe.category}
+                        </span>
+                    </div>
+
+                    <p class="text-sm text-gray-600 mb-4">${recipe.description || 'Описание отсутствует'}</p>
+
+                    <div class="space-y-2 mb-4">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Ингредиентов:</span>
+                            <span class="font-medium">${recipe.ingredients ? recipe.ingredients.length : 0}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Общий вес:</span>
+                            <span class="font-medium">${recipe.totalWeight || 0} г</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Себестоимость:</span>
+                            <span class="font-medium text-green-600">${(recipe.totalCost || 0).toFixed(2)} ₽</span>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <button onclick="viewRecipe('${recipe.id}')" 
+                                class="text-blue-600 hover:text-blue-900 text-sm font-medium">
+                            <i class="fas fa-eye mr-1"></i>
+                            Просмотр
+                        </button>
+                        <div class="space-x-2">
+                            <button onclick="editRecipe('${recipe.id}')" 
+                                    class="text-orange-600 hover:text-orange-900 text-sm">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteRecipe('${recipe.id}')" 
+                                    class="text-red-600 hover:text-red-900 text-sm">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        grid.innerHTML += card;
+    });
+}
+
+// УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ
+function loadProductionTasks() {
+    const tbody = document.getElementById('production-table');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (productionTasks.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                    <i class="fas fa-cogs text-4xl mb-3"></i>
+                    <p>Нет производственных заданий</p>
+                    <button onclick="showModal('production-task-modal')" 
+                            class="mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700">
+                        <i class="fas fa-plus mr-2"></i>
+                        Создать первое задание
+                    </button>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    productionTasks.forEach(task => {
+        const status = getProductionStatus(task);
+        const row = `
+            <tr class="table-row">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">${task.batchNumber || task.id}</div>
+                    <div class="text-sm text-gray-500">${task.recipeName || 'Неизвестный рецепт'}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${task.batchSize || 0} кг
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    ${task.productionDate ? new Date(task.productionDate).toLocaleDateString('ru-RU') : 'Не указана'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">${(task.totalCost || 0).toFixed(2)} ₽</div>
+                    <div class="text-xs text-gray-500">${(task.costPerKg || 0).toFixed(2)} ₽/кг</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.class}">
+                        ${status.text}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                    <button onclick="viewProductionTask('${task.id}')" 
+                            class="text-blue-600 hover:text-blue-900">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}
+
+function getProductionStatus(task) {
+    switch (task.status) {
+        case 'draft':
+            return { class: 'status-draft', text: 'Черновик' };
+        case 'active':
+            return { class: 'status-active', text: 'Активное' };
+        case 'in-production':
+            return { class: 'status-in-production', text: 'В производстве' };
+        case 'completed':
+            return { class: 'status-completed', text: 'Завершено' };
+        case 'cancelled':
+            return { class: 'status-cancelled', text: 'Отменено' };
+        default:
+            return { class: 'status-draft', text: 'Неизвестно' };
+    }
+}
+
+function loadRecipesForProduction() {
+    const select = document.getElementById('production-recipe-select');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Выберите рецепт из базы</option>';
+    
+    recipes.forEach(recipe => {
+        const option = `<option value="${recipe.id}">${recipe.name} (${recipe.category})</option>`;
+        select.innerHTML += option;
+    });
+}
+
+function setDefaultProductionDate() {
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('production-date');
+    if (dateInput) {
+        dateInput.value = today;
+    }
+}
+
+// КОНСТРУКТОР РЕЦЕПТОВ
+function clearRecipeIngredients() {
+    const container = document.getElementById('recipe-ingredients');
+    if (container) {
+        container.innerHTML = '';
+    }
+    updateRecipeCalculations();
+}
+
+function addIngredientToRecipe() {
+    if (ingredients.length === 0) {
+        alert('Сначала добавьте ингредиенты в систему');
+        return;
+    }
+
+    const ingredientsContainer = document.getElementById('recipe-ingredients');
+    const ingredientId = `recipe-ingredient-${Date.now()}`;
+
+    const ingredientRow = `
+        <div class="ingredient-row" data-id="${ingredientId}">
+            <div class="flex items-center space-x-4">
+                <div class="flex-1">
+                    <select class="ingredient-select w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                            onchange="updateRecipeCalculations()">
+                        <option value="">Выберите ингредиент</option>
+                        ${ingredients.map(ing => `
+                            <option value="${ing.id}" data-price="${ing.price}" data-stock="${ing.stock}">
+                                ${ing.name} (${ing.stock} кг на складе, ${ing.price} ₽/кг)
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="w-32">
+                    <input type="number" step="0.1" min="0" placeholder="Вес (г)" 
+                           class="ingredient-weight w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                           onchange="updateRecipeCalculations()">
+                </div>
+                <div class="w-24 text-sm text-gray-600 text-center">
+                    <span class="ingredient-cost">0 ₽</span>
+                </div>
+                <button type="button" onclick="removeIngredientFromRecipe('${ingredientId}')" 
+                        class="text-red-600 hover:text-red-800">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+
+    if (ingredientsContainer) {
+        ingredientsContainer.innerHTML += ingredientRow;
+    }
+}
+
+function removeIngredientFromRecipe(ingredientId) {
+    const element = document.querySelector(`[data-id="${ingredientId}"]`);
+    if (element) {
+        element.remove();
+        updateRecipeCalculations();
+    }
+}
+
+function updateRecipeCalculations() {
+    const ingredientRows = document.querySelectorAll('.ingredient-row');
+    let totalWeight = 0;
+    let totalCost = 0;
+
+    ingredientRows.forEach(row => {
+        const select = row.querySelector('.ingredient-select');
+        const weightInput = row.querySelector('.ingredient-weight');
+        const costSpan = row.querySelector('.ingredient-cost');
+
+        const selectedOption = select.selectedOptions[0];
+        const weight = parseFloat(weightInput.value) || 0;
+
+        if (selectedOption && selectedOption.value && weight > 0) {
+            const price = parseFloat(selectedOption.dataset.price) || 0;
+            const cost = (weight / 1000) * price; // вес в граммах, цена за кг
+
+            costSpan.textContent = cost.toFixed(2) + ' ₽';
+            totalWeight += weight;
+            totalCost += cost;
+        } else {
+            costSpan.textContent = '0 ₽';
+        }
+    });
+
+    const totalWeightEl = document.getElementById('recipe-total-weight');
+    const totalCostEl = document.getElementById('recipe-total-cost');
+    const costPerKgEl = document.getElementById('recipe-cost-per-kg');
+
+    if (totalWeightEl) totalWeightEl.textContent = totalWeight + ' г';
+    if (totalCostEl) totalCostEl.textContent = totalCost.toFixed(2) + ' ₽';
+    if (costPerKgEl) costPerKgEl.textContent = totalCost.toFixed(2) + ' ₽';
+}
+
+function saveRecipe(event) {
+    event.preventDefault();
+
+    const recipeIngredients = getRecipeIngredients();
+    if (recipeIngredients.length === 0) {
+        alert('Добавьте хотя бы один ингредиент в рецепт');
+        return;
+    }
+
+    const formData = {
+        id: document.getElementById('recipe-id').value || Date.now().toString(),
+        name: document.getElementById('recipe-name').value,
+        category: document.getElementById('recipe-category').value,
+        description: document.getElementById('recipe-description').value,
+        ingredients: recipeIngredients,
+        totalWeight: calculateRecipeTotalWeight(recipeIngredients),
+        totalCost: calculateRecipeTotalCost(recipeIngredients),
+        createdAt: new Date().toISOString()
+    };
+
+    const existingIndex = recipes.findIndex(recipe => recipe.id === formData.id);
+    if (existingIndex >= 0) {
+        recipes[existingIndex] = formData;
+    } else {
+        recipes.push(formData);
+    }
+
+    saveDataToStorage();
+    hideModal('recipe-modal');
+    loadRecipes();
+    updateDashboardStats();
+
+    showNotification('Рецепт успешно сохранен', 'success');
+}
+
+function getRecipeIngredients() {
+    const ingredientRows = document.querySelectorAll('.ingredient-row');
+    const recipeIngredients = [];
+
+    ingredientRows.forEach(row => {
+        const select = row.querySelector('.ingredient-select');
+        const weightInput = row.querySelector('.ingredient-weight');
+
+        const ingredientId = select.value;
+        const weight = parseFloat(weightInput.value) || 0;
+
+        if (ingredientId && weight > 0) {
+            const ingredient = ingredients.find(ing => ing.id === ingredientId);
+            if (ingredient) {
+                recipeIngredients.push({
+                    ingredientId: ingredientId,
+                    name: ingredient.name,
+                    weight: weight,
+                    price: ingredient.price,
+                    cost: (weight / 1000) * ingredient.price
+                });
+            }
+        }
+    });
+
+    return recipeIngredients;
+}
+
+function calculateRecipeTotalWeight(ingredients) {
+    return ingredients.reduce((total, ing) => total + ing.weight, 0);
+}
+
+function calculateRecipeTotalCost(ingredients) {
+    return ingredients.reduce((total, ing) => total + ing.cost, 0);
+}
+
+// УПАКОВОЧНЫЕ МАТЕРИАЛЫ
+function loadPackagingMaterials() {
+    const tbody = document.getElementById('packaging-table');
+    if (!tbody) return;
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                <i class="fas fa-boxes text-4xl mb-3"></i>
+                <p>Функция упаковочных материалов находится в разработке</p>
+            </td>
+        </tr>
+    `;
+}
+
+function savePackaging(event) {
+    event.preventDefault();
+    showNotification('Функция упаковки находится в разработке', 'info');
+    hideModal('packaging-modal');
+}
+
+// УВЕДОМЛЕНИЯ
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 max-w-sm p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full`;
+    
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    notification.className += ` ${bgColor} text-white`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}-circle mr-3"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Показать уведомление
+    setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Скрыть уведомление через 3 секунды
+    setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Заглушки для функций
+function viewRecipe(id) { showNotification('Просмотр рецепта', 'info'); }
+function editRecipe(id) { showNotification('Редактирование рецепта', 'info'); }
+function deleteRecipe(id) { 
+    if (confirm('Удалить рецепт?')) {
+        recipes = recipes.filter(r => r.id !== id);
+        saveDataToStorage();
+        loadRecipes();
+        updateDashboardStats();
+        showNotification('Рецепт удален', 'success');
+    }
+}
+function viewProductionTask(id) { showNotification('Просмотр производственного задания', 'info'); }
+function exportProductionTask(id) { showNotification('Экспорт задания', 'info'); }
+function clearIngredientFilters() { loadIngredients(); }
+function clearProductionFilters() { loadProductionTasks(); }
+function filterIngredients() { /* Фильтрация в разработке */ }
+
+// ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ПРОИЗВОДСТВА
+function generateBatchNumber() {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    
+    // Найти максимальный номер партии на сегодня
+    const todayBatches = productionTasks.filter(task => 
+        task.batchNumber && task.batchNumber.startsWith(dateStr)
+    );
+    
+    let maxNumber = 0;
+    todayBatches.forEach(task => {
+        const numberMatch = task.batchNumber.match(/(\d+)$/);
+        if (numberMatch) {
+            maxNumber = Math.max(maxNumber, parseInt(numberMatch[1]));
+        }
+    });
+
+    const newBatchNumber = dateStr + '-' + String(maxNumber + 1).padStart(3, '0');
+    const batchNumberInput = document.getElementById('production-batch-number');
+    if (batchNumberInput) {
+        batchNumberInput.value = newBatchNumber;
+    }
+}
+
+function updateProductionCalculations() {
+    const recipeId = document.getElementById('production-recipe-select').value;
+    const batchSize = parseFloat(document.getElementById('production-batch-size').value) || 0;
+
+    if (!recipeId || batchSize <= 0) {
+        return;
+    }
+
+    const recipe = recipes.find(r => r.id === recipeId);
+    if (!recipe || !recipe.ingredients) return;
+
+    // Простой расчет себестоимости
+    let totalCost = 0;
+    recipe.ingredients.forEach(recipeIng => {
+        const ingredient = ingredients.find(ing => ing.id === recipeIng.ingredientId);
+        if (ingredient) {
+            const neededWeight = (recipeIng.weight * batchSize) / 1000; // в кг
+            const ingredientCost = neededWeight * ingredient.price;
+            totalCost += ingredientCost;
+        }
+    });
+
+    showNotification(`Расчет для партии ${batchSize} кг: ${totalCost.toFixed(2)} ₽`, 'info');
+}
+
+function saveProductionTask(event) {
+    event.preventDefault();
+
+    const recipeId = document.getElementById('production-recipe-select').value;
+    const batchSize = parseFloat(document.getElementById('production-batch-size').value);
+    let batchNumber = document.getElementById('production-batch-number').value;
+
+    if (!recipeId) {
+        alert('Выберите рецепт');
+        return;
+    }
+
+    if (!batchSize || batchSize <= 0) {
+        alert('Укажите объем партии');
+        return;
+    }
+
+    if (!batchNumber) {
+        generateBatchNumber();
+        batchNumber = document.getElementById('production-batch-number').value;
+    }
+
+    // Проверка дублирования номера партии
+    const existingBatch = productionTasks.find(task => task.batchNumber === batchNumber);
+    if (existingBatch) {
+        const confirmOverride = confirm(`Партия с номером ${batchNumber} уже существует. Сгенерировать новый номер?`);
+        if (confirmOverride) {
+            generateBatchNumber();
+            batchNumber = document.getElementById('production-batch-number').value;
+        } else {
+            return;
+        }
+    }
+
+    const recipe = recipes.find(r => r.id === recipeId);
+    
+    // Расчет себестоимости партии
+    let totalCost = 0;
+    if (recipe && recipe.ingredients) {
+        recipe.ingredients.forEach(recipeIng => {
+            const ingredient = ingredients.find(ing => ing.id === recipeIng.ingredientId);
+            if (ingredient) {
+                const neededWeight = (recipeIng.weight * batchSize) / 1000; // в кг
+                const ingredientCost = neededWeight * ingredient.price;
+                totalCost += ingredientCost;
+            }
+        });
+    }
+
+    const taskData = {
+        id: document.getElementById('production-task-id').value || Date.now().toString(),
+        recipeId: recipeId,
+        recipeName: recipe ? recipe.name : 'Неизвестный рецепт',
+        batchSize: batchSize,
+        batchNumber: batchNumber,
+        productionDate: document.getElementById('production-date').value,
+        totalCost: totalCost,
+        costPerKg: totalCost / batchSize,
+        status: 'in-production',
+        createdAt: new Date().toISOString(),
+        startedAt: new Date().toISOString()
+    };
+
+    // Списание ингредиентов со склада
+    if (recipe && recipe.ingredients) {
+        recipe.ingredients.forEach(recipeIng => {
+            const ingredient = ingredients.find(ing => ing.id === recipeIng.ingredientId);
+            if (ingredient) {
+                const neededWeight = (recipeIng.weight * batchSize) / 1000; // в кг
+                ingredient.stock = Math.max(0, ingredient.stock - neededWeight);
+            }
+        });
+    }
+
+    const existingIndex = productionTasks.findIndex(task => task.id === taskData.id);
+    if (existingIndex >= 0) {
+        productionTasks[existingIndex] = taskData;
+    } else {
+        productionTasks.push(taskData);
+    }
+
+    saveDataToStorage();
+    hideModal('production-task-modal');
+    loadProductionTasks();
+    loadIngredients(); // Обновить остатки ингредиентов
+    updateDashboardStats();
+
+    showNotification(`Производственное задание ${batchNumber} успешно запущено! Себестоимость: ${totalCost.toFixed(2)} ₽`, 'success');
+}
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM "Повар Бим" - Система управления рецептами</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        .nav-item:hover {
+            background-color: #f3f4f6;
+            border-radius: 8px;
+        }
+        .table-row:hover {
+            background-color: #f9fafb;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal {
+            display: none;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.show {
+            display: flex !important;
+        }
+        .modal.fixed {
+            position: fixed;
+        }
+        .modal-container {
+            max-height: 95vh;
+            overflow-y: auto;
+            margin: 2.5vh auto;
+        }
+        .badge-physical { @apply bg-blue-100 text-blue-800; }
+        .badge-legal { @apply bg-purple-100 text-purple-800; }
+        .badge-store { @apply bg-green-100 text-green-800; }
+        .badge-wholesale { @apply bg-orange-100 text-orange-800; }
+        .badge-company { @apply bg-gray-100 text-gray-800; }
+        .badge-active { @apply bg-green-100 text-green-800; }
+        .badge-inactive { @apply bg-red-100 text-red-800; }
+        .status-new { @apply bg-blue-100 text-blue-800; }
+        .status-in-progress { @apply bg-yellow-100 text-yellow-800; }
+        .status-completed { @apply bg-green-100 text-green-800; }
+        .status-cancelled { @apply bg-red-100 text-red-800; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white shadow-lg">
+            <div class="p-4">
+                <h1 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-paw text-orange-500 mr-2"></i>
+                    CRM "Повар Бим"
+                </h1>
+                <p class="text-sm text-gray-600">Управление рецептами</p>
+            </div>
+            
+            <nav class="mt-8">
+                <a href="#" onclick="showSection('dashboard')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-chart-dashboard mr-3"></i>
+                    Панель управления
+                </a>
+                
+                <a href="#" onclick="showSection('customers')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-users mr-3"></i>
+                    Клиенты
+                </a>
+                
+                <a href="#" onclick="showSection('products')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-boxes mr-3"></i>
+                    Товары
+                </a>
+                
+                <a href="#" onclick="showSection('orders')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-shopping-cart mr-3"></i>
+                    Заказы
+                </a>
+                
+                <a href="#" onclick="showSection('ingredients')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-seedling mr-3"></i>
+                    Ингредиенты
+                </a>
+                
+                <a href="#" onclick="showSection('recipes')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-recipe mr-3"></i>
+                    Рецепты
+                </a>
+                
+                <a href="#" onclick="showSection('production')" class="nav-item group flex items-center px-2 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-1">
+                    <i class="fas fa-industry mr-3"></i>
+                    Производство
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main content -->
+        <div class="flex-1 overflow-hidden">
+            <div class="p-8">
+                <!-- Dashboard Section -->
+                <div id="dashboard-section" class="content-section fade-in">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                        <i class="fas fa-chart-dashboard mr-2"></i>
+                        Панель управления
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-users text-indigo-500 text-2xl"></i>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Клиенты</dt>
+                                            <dd class="text-lg font-medium text-gray-900" id="stats-customers">0</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-boxes text-green-500 text-2xl"></i>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Товары</dt>
+                                            <dd class="text-lg font-medium text-gray-900" id="stats-products">0</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-seedling text-orange-500 text-2xl"></i>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Ингредиенты</dt>
+                                            <dd class="text-lg font-medium text-gray-900" id="stats-ingredients">0</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white overflow-hidden shadow rounded-lg">
+                            <div class="p-5">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="fas fa-recipe text-purple-500 text-2xl"></i>
+                                    </div>
+                                    <div class="ml-5 w-0 flex-1">
+                                        <dl>
+                                            <dt class="text-sm font-medium text-gray-500 truncate">Рецепты</dt>
+                                            <dd class="text-lg font-medium text-gray-900" id="stats-recipes">0</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Добро пожаловать в CRM систему "Повар Бим"!</h3>
+                            <p class="text-gray-600">
+                                Эта система поможет вам управлять производством полнорационных каш для собак:
+                            </p>
+                            <ul class="mt-4 space-y-2 text-gray-600">
+                                <li><i class="fas fa-check text-green-500 mr-2"></i> Управление клиентами и заказами</li>
+                                <li><i class="fas fa-check text-green-500 mr-2"></i> Учёт ингредиентов и складских запасов</li>
+                                <li><i class="fas fa-check text-green-500 mr-2"></i> Создание и управление рецептами</li>
+                                <li><i class="fas fa-check text-green-500 mr-2"></i> Планирование производства</li>
+                                <li><i class="fas fa-check text-green-500 mr-2"></i> Автоматический расчёт себестоимости</li>
+                                <li><i class="fas fa-check text-green-500 mr-2"></li> Экспорт данных в Excel</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers Section -->
+                <div id="customers-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-users mr-2"></i>
+                            Клиенты
+                        </h2>
+                        <button onclick="openModal('customerModal')" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-plus mr-2"></i>
+                            Добавить клиента
+                        </button>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Имя</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Контакты</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customers-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Клиенты будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Products Section -->
+                <div id="products-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-boxes mr-2"></i>
+                            Товары
+                        </h2>
+                        <button onclick="openModal('productModal')" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-plus mr-2"></i>
+                            Добавить товар
+                        </button>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Единица измерения</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Товары будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Orders Section -->
+                <div id="orders-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-shopping-cart mr-2"></i>
+                            Заказы
+                        </h2>
+                        <button onclick="openModal('orderModal')" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-plus mr-2"></i>
+                            Создать заказ
+                        </button>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">№ Заказа</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Клиент</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Сумма</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="orders-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Заказы будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Ingredients Section -->
+                <div id="ingredients-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-seedling mr-2"></i>
+                            Ингредиенты
+                        </h2>
+                        <button onclick="openModal('ingredientModal')" class="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-plus mr-2"></i>
+                            Добавить ингредиент
+                        </button>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Категория</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Цена за кг</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Остаток на складе</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ingredients-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Ингредиенты будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recipes Section -->
+                <div id="recipes-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-recipe mr-2"></i>
+                            Рецепты
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportRecipesToExcel()" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                                <i class="fas fa-download mr-2"></i>
+                                Экспорт в Excel
+                            </button>
+                            <button onclick="openModal('recipeModal')" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                                <i class="fas fa-plus mr-2"></i>
+                                Создать рецепт
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип каши</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ингредиентов</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Себестоимость/кг</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Можно произвести</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recipes-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Рецепты будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Production Section -->
+                <div id="production-section" class="content-section hidden fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <i class="fas fa-industry mr-2"></i>
+                            Производственные задачи
+                        </h2>
+                        <div class="flex space-x-2">
+                            <button onclick="exportProductionToExcel()" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                                <i class="fas fa-download mr-2"></i>
+                                Экспорт в Excel
+                            </button>
+                            <button onclick="openModal('productionModal')" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                                <i class="fas fa-plus mr-2"></i>
+                                Создать задачу
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">№ Партии</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Рецепт</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Количество (кг)</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата создания</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Себестоимость</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="production-table" class="bg-white divide-y divide-gray-200">
+                                <!-- Производственные задачи будут добавлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Modal -->
+    <div id="customerModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-user-plus mr-2"></i>
+                                Добавить клиента
+                            </h3>
+                            <form id="customerForm">
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Название/Имя</label>
+                                    <input type="text" id="customerName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Тип клиента</label>
+                                    <select id="customerType" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                        <option value="physical">Физическое лицо</option>
+                                        <option value="legal">Юридическое лицо</option>
+                                        <option value="store">Зоомагазин</option>
+                                        <option value="wholesale">Оптовик</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                                    <input type="email" id="customerEmail" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Телефон</label>
+                                    <input type="tel" id="customerPhone" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Адрес</label>
+                                    <textarea id="customerAddress" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="3"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveCustomer()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Сохранить
+                    </button>
+                    <button onclick="closeModal('customerModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div id="productModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-box mr-2"></i>
+                                Добавить товар
+                            </h3>
+                            <form id="productForm">
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Название товара</label>
+                                    <input type="text" id="productName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Категория</label>
+                                    <div class="flex">
+                                        <select id="productCategory" class="flex-1 px-3 py-2 border rounded-l-lg focus:outline-none focus:border-blue-500">
+                                            <!-- Категории будут заполнены динамически -->
+                                        </select>
+                                        <button type="button" onclick="openModal('categoryModal')" class="px-3 py-2 bg-gray-200 border border-l-0 rounded-r-lg hover:bg-gray-300">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Единица измерения</label>
+                                    <div class="flex">
+                                        <select id="productUnit" class="flex-1 px-3 py-2 border rounded-l-lg focus:outline-none focus:border-blue-500">
+                                            <!-- Единицы измерения будут заполнены динамически -->
+                                        </select>
+                                        <button type="button" onclick="openModal('unitModal')" class="px-3 py-2 bg-gray-200 border border-l-0 rounded-r-lg hover:bg-gray-300">
+                                            <i class="fas fa-cog"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Цена</label>
+                                    <input type="number" id="productPrice" step="0.01" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Описание</label>
+                                    <textarea id="productDescription" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="3"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveProduct()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Сохранить
+                    </button>
+                    <button onclick="closeModal('productModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Management Modal -->
+    <div id="categoryModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-tags mr-2"></i>
+                                Управление категориями
+                            </h3>
+                            
+                            <div class="mb-4">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Новая категория</label>
+                                <div class="flex">
+                                    <input type="text" id="newCategory" class="flex-1 px-3 py-2 border rounded-l-lg focus:outline-none focus:border-blue-500">
+                                    <button onclick="addCategory()" class="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Существующие категории</label>
+                                <div id="categoryList" class="space-y-2 max-h-40 overflow-y-auto">
+                                    <!-- Категории будут заполнены динамически -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="closeModal('categoryModal')" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:w-auto sm:text-sm">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unit Management Modal -->
+    <div id="unitModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-ruler mr-2"></i>
+                                Управление единицами измерения
+                            </h3>
+                            
+                            <div class="mb-4">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Новая единица измерения</label>
+                                <div class="flex">
+                                    <input type="text" id="newUnit" placeholder="Название (сокращение)" class="flex-1 px-3 py-2 border rounded-l-lg focus:outline-none focus:border-blue-500">
+                                    <button onclick="addUnit()" class="px-4 py-2 bg-blue-500 text-white rounded-r-lg hover:bg-blue-600">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label class="block text-gray-700 text-sm font-bold mb-2">Существующие единицы</label>
+                                <div id="unitList" class="space-y-2 max-h-40 overflow-y-auto">
+                                    <!-- Единицы измерения будут заполнены динамически -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="closeModal('unitModal')" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:w-auto sm:text-sm">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Modal -->
+    <div id="orderModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-shopping-cart mr-2"></i>
+                                Создать заказ
+                            </h3>
+                            <form id="orderForm">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Клиент</label>
+                                        <select id="orderCustomer" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                            <option value="">Выберите клиента</option>
+                                            <!-- Клиенты будут заполнены динамически -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Дата доставки</label>
+                                        <input type="date" id="orderDeliveryDate" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Товары</label>
+                                    <div class="border rounded-lg p-4">
+                                        <div class="flex gap-2 mb-2">
+                                            <select id="orderProductSelect" class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                                <option value="">Выберите товар</option>
+                                                <!-- Товары будут заполнены динамически -->
+                                            </select>
+                                            <input type="number" id="orderProductQuantity" placeholder="Количество" class="w-32 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                            <button type="button" onclick="addProductToOrder()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                        </div>
+                                        <div id="orderProductsList" class="space-y-2">
+                                            <!-- Товары в заказе будут добавлены динамически -->
+                                        </div>
+                                        <div class="mt-4 pt-4 border-t">
+                                            <div class="flex justify-between font-bold">
+                                                <span>Общая сумма:</span>
+                                                <span id="orderTotal">0.00 ₽</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Комментарий</label>
+                                    <textarea id="orderComment" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="3"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveOrder()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-purple-600 text-base font-medium text-white hover:bg-purple-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Сохранить
+                    </button>
+                    <button onclick="closeModal('orderModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ingredient Modal -->
+    <div id="ingredientModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-seedling mr-2"></i>
+                                Добавить ингредиент
+                            </h3>
+                            <form id="ingredientForm">
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Название ингредиента</label>
+                                    <input type="text" id="ingredientName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Категория</label>
+                                    <select id="ingredientCategory" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                        <option value="meat">Мясо</option>
+                                        <option value="cereals">Крупы</option>
+                                        <option value="vegetables">Овощи</option>
+                                        <option value="supplements">Добавки</option>
+                                        <option value="vitamins">Витамины</option>
+                                    </select>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Цена за кг (₽)</label>
+                                    <input type="number" id="ingredientPrice" step="0.01" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Остаток на складе (кг)</label>
+                                    <input type="number" id="ingredientStock" step="0.01" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Минимальный остаток (кг)</label>
+                                    <input type="number" id="ingredientMinStock" step="0.01" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Поставщик</label>
+                                    <input type="text" id="ingredientSupplier" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveIngredient()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Сохранить
+                    </button>
+                    <button onclick="closeModal('ingredientModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recipe Modal -->
+    <div id="recipeModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-recipe mr-2"></i>
+                                Создать рецепт
+                            </h3>
+                            <form id="recipeForm">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Название рецепта</label>
+                                        <input type="text" id="recipeName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Тип каши</label>
+                                        <select id="recipeType" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                            <option value="beef">Говядина</option>
+                                            <option value="chicken">Курица</option>
+                                            <option value="salmon">Лосось</option>
+                                            <option value="light">Лайт</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Ингредиенты (на 1 кг готового продукта)</label>
+                                    <div class="border rounded-lg p-4">
+                                        <div class="flex gap-2 mb-2">
+                                            <select id="recipeIngredientSelect" class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                                <option value="">Выберите ингредиент</option>
+                                                <!-- Ингредиенты будут заполнены динамически -->
+                                            </select>
+                                            <input type="number" id="recipeIngredientAmount" placeholder="Количество (г)" step="0.1" class="w-32 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                            <button type="button" onclick="addIngredientToRecipe()" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                        </div>
+                                        <div id="recipeIngredientsList" class="space-y-2 mb-4">
+                                            <!-- Ингредиенты в рецепте будут добавлены динамически -->
+                                        </div>
+                                        <div class="mt-4 pt-4 border-t">
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div class="flex justify-between">
+                                                    <span class="font-semibold">Общий вес:</span>
+                                                    <span id="recipeTotalWeight">0 г</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="font-semibold">Себестоимость:</span>
+                                                    <span id="recipeTotalCost">0.00 ₽</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="font-bold text-lg">Цена за кг:</span>
+                                                    <span id="recipeCostPerKg" class="font-bold text-lg">0.00 ₽</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Описание процесса приготовления</label>
+                                    <textarea id="recipeInstructions" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="4"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveRecipe()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Сохранить
+                    </button>
+                    <button onclick="closeModal('recipeModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Production Modal -->
+    <div id="productionModal" class="modal fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-container fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div class="sm:flex sm:items-start">
+                        <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                                <i class="fas fa-industry mr-2"></i>
+                                Создать производственную задачу
+                            </h3>
+                            <form id="productionForm">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Рецепт</label>
+                                        <select id="productionRecipe" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required onchange="updateProductionPreview()">
+                                            <option value="">Выберите рецепт</option>
+                                            <!-- Рецепты будут заполнены динамически -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 text-sm font-bold mb-2">Количество (кг)</label>
+                                        <input type="number" id="productionQuantity" step="0.1" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required onchange="updateProductionPreview()">
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4" id="productionPreview" style="display: none;">
+                                    <div class="bg-gray-50 rounded-lg p-4">
+                                        <h4 class="font-semibold mb-2">Предварительный расчёт:</h4>
+                                        <div id="productionIngredientsList" class="space-y-1 mb-2">
+                                            <!-- Ингредиенты для производства будут показаны динамически -->
+                                        </div>
+                                        <div class="pt-2 border-t border-gray-300">
+                                            <div class="flex justify-between font-semibold">
+                                                <span>Общая себестоимость:</span>
+                                                <span id="productionTotalCost">0.00 ₽</span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2" id="productionAvailabilityCheck">
+                                            <!-- Проверка доступности ингредиентов -->
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Плановая дата производства</label>
+                                    <input type="date" id="productionDate" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <label class="block text-gray-700 text-sm font-bold mb-2">Комментарий</label>
+                                    <textarea id="productionComment" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="3"></textarea>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button onclick="saveProduction()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        Создать задачу
+                    </button>
+                    <button onclick="closeModal('productionModal')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/crm.js"></script>
+</body>
+</html>
