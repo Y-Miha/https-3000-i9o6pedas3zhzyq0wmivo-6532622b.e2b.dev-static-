@@ -771,7 +771,7 @@
                                     <i class="fas fa-print mr-2"></i>
                                     Печать
                                 </button>
-                                <button onclick="showModal('product-modal')" 
+                                <button onclick="showProductModal()" 
                                         class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
                                     <i class="fas fa-plus mr-2"></i>
                                     Добавить товар
@@ -1492,17 +1492,29 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Единица измерения *</label>
-                            <select id="product-unit" required 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                                <option value="">Выберите единицу</option>
-                            </select>
+                            <div class="flex">
+                                <select id="product-unit" required 
+                                        class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                                    <option value="">Выберите единицу</option>
+                                </select>
+                                <button type="button" onclick="showProductUnitModal()" title="Управление единицами измерения"
+                                        class="px-3 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Категория *</label>
-                            <select id="product-category" required 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
-                                <option value="">Выберите категорию</option>
-                            </select>
+                            <div class="flex">
+                                <select id="product-category" required 
+                                        class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500">
+                                    <option value="">Выберите категорию</option>
+                                </select>
+                                <button type="button" onclick="showProductCategoryModal()" title="Управление категориями"
+                                        class="px-3 py-2 bg-orange-600 text-white rounded-r-md hover:bg-orange-700">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5505,6 +5517,94 @@ function clearProductFilters() {
     document.getElementById('products-status-filter').value = '';
     document.getElementById('products-sort').value = 'name';
     loadProducts();
+}
+
+// Сброс фильтров (алиас для clearProductFilters)
+function resetProductFilters() {
+    clearProductFilters();
+}
+
+// Добавление единицы измерения
+function addProductUnit() {
+    const name = document.getElementById('new-unit-name').value.trim();
+    const code = document.getElementById('new-unit-code').value.trim();
+    
+    if (!name || !code) {
+        showNotification('Заполните название и код единицы измерения', 'error');
+        return;
+    }
+    
+    const unitData = {
+        id: Date.now().toString(),
+        name: name,
+        symbol: code,
+        description: '',
+        createdAt: new Date().toISOString()
+    };
+    
+    // Проверка уникальности
+    const existingUnit = productUnits.find(u => u.name === name || u.symbol === code);
+    if (existingUnit) {
+        showNotification('Единица с таким названием или кодом уже существует', 'error');
+        return;
+    }
+    
+    productUnits.push(unitData);
+    saveDataToStorage();
+    
+    // Очищаем поля
+    document.getElementById('new-unit-name').value = '';
+    document.getElementById('new-unit-code').value = '';
+    
+    // Обновляем список
+    loadProductUnits();
+    loadProductUnitsToSelect();
+    
+    showNotification(`Единица "${name}" добавлена`, 'success');
+}
+
+// Добавление категории товара
+function addProductCategory() {
+    const name = document.getElementById('new-category-name').value.trim();
+    const color = document.getElementById('new-category-color').value;
+    
+    if (!name) {
+        showNotification('Введите название категории', 'error');
+        return;
+    }
+    
+    // Создаем префикс из названия категории
+    const prefix = name.substring(0, 3).toUpperCase();
+    
+    const categoryData = {
+        id: Date.now().toString(),
+        name: name,
+        prefix: prefix,
+        description: '',
+        color: color,
+        createdAt: new Date().toISOString()
+    };
+    
+    // Проверка уникальности
+    const existingCategory = productCategories.find(c => c.name === name);
+    if (existingCategory) {
+        showNotification('Категория с таким названием уже существует', 'error');
+        return;
+    }
+    
+    productCategories.push(categoryData);
+    saveDataToStorage();
+    
+    // Очищаем поля
+    document.getElementById('new-category-name').value = '';
+    document.getElementById('new-category-color').value = '#10B981';
+    
+    // Обновляем списки
+    loadProductCategories();
+    loadProductCategoriesToSelect();
+    loadCategoriesFilter();
+    
+    showNotification(`Категория "${name}" добавлена`, 'success');
 }
 
 // ================================
