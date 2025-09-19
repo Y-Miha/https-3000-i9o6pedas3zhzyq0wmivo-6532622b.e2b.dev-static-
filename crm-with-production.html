@@ -1829,9 +1829,19 @@ function showNotification(message, type = 'info') {
 
 // Функции работы с рецептами
 function viewRecipe(id) {
-    const recipes = JSON.parse(localStorage.getItem('recipes')) || [];
+    console.log('🔧 viewRecipe called with id:', id);
+    
+    const recipes = JSON.parse(localStorage.getItem('povoarBimRecipes')) || [];
+    console.log('🔧 Found recipes:', recipes.length);
+    
     const recipe = recipes.find(r => r.id == id);
-    if (!recipe) return;
+    console.log('🔧 Found recipe:', recipe);
+    
+    if (!recipe) {
+        console.error('🔧 Recipe not found with id:', id);
+        showNotification('Рецепт не найден', 'error');
+        return;
+    }
     
     // Заполнение модального окна данными для просмотра только для чтения
     document.getElementById('recipe-name').value = recipe.name;
@@ -1840,9 +1850,16 @@ function viewRecipe(id) {
     
     // Очистка и загрузка ингредиентов рецепта
     clearRecipeIngredients();
-    recipe.ingredients.forEach((ingredient) => {
-        addRecipeIngredient(ingredient.ingredientId || ingredient.id, ingredient.weight);
-    });
+    
+    console.log('🔧 Recipe ingredients:', recipe.ingredients);
+    
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+        recipe.ingredients.forEach((ingredient, index) => {
+            console.log(`🔧 Adding ingredient ${index}:`, ingredient);
+            const ingredientId = ingredient.ingredientId || ingredient.id;
+            addRecipeIngredient(ingredientId, ingredient.weight);
+        });
+    }
     
     // Делаем поля только для чтения
     const modal = document.getElementById('recipe-modal');
@@ -1853,13 +1870,28 @@ function viewRecipe(id) {
     const saveBtn = modal.querySelector('button[type="submit"]');
     if (saveBtn) saveBtn.style.display = 'none';
     
+    // Меняем заголовок
+    const title = document.getElementById('recipe-modal-title');
+    if (title) title.textContent = `Просмотр рецепта: ${recipe.name}`;
+    
+    console.log('🔧 Opening recipe modal for viewing');
     showModal('recipe-modal', true);
 }
 
 function editRecipe(id) {
-    const recipes = JSON.parse(localStorage.getItem('recipes')) || [];
+    console.log('🔧 editRecipe called with id:', id);
+    
+    const recipes = JSON.parse(localStorage.getItem('povoarBimRecipes')) || [];
+    console.log('🔧 Found recipes:', recipes.length);
+    
     const recipe = recipes.find(r => r.id == id);
-    if (!recipe) return;
+    console.log('🔧 Found recipe for editing:', recipe);
+    
+    if (!recipe) {
+        console.error('🔧 Recipe not found for editing with id:', id);
+        showNotification('Рецепт не найден', 'error');
+        return;
+    }
     
     // Заполнение формы данными рецепта
     document.getElementById('recipe-id').value = recipe.id;
@@ -1870,10 +1902,16 @@ function editRecipe(id) {
     // Очистка ингредиентов
     clearRecipeIngredients();
     
+    console.log('🔧 Recipe ingredients for editing:', recipe.ingredients);
+    
     // Загрузка всех ингредиентов рецепта
-    recipe.ingredients.forEach((ingredient) => {
-        addRecipeIngredient(ingredient.ingredientId || ingredient.id, ingredient.weight);
-    });
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+        recipe.ingredients.forEach((ingredient, index) => {
+            console.log(`🔧 Adding ingredient ${index} for editing:`, ingredient);
+            const ingredientId = ingredient.ingredientId || ingredient.id;
+            addRecipeIngredient(ingredientId, ingredient.weight);
+        });
+    }
     
     // Восстанавливаем поля для редактирования
     const modal = document.getElementById('recipe-modal');
@@ -1884,18 +1922,41 @@ function editRecipe(id) {
     const saveBtn = modal.querySelector('button[type="submit"]');
     if (saveBtn) saveBtn.style.display = 'inline-flex';
     
+    // Меняем заголовок
+    const title = document.getElementById('recipe-modal-title');
+    if (title) title.textContent = `Редактировать рецепт: ${recipe.name}`;
+    
+    console.log('🔧 Opening recipe modal for editing');
     updateRecipeCalculations();
     showModal('recipe-modal', true);
 }
 
-function deleteRecipe(id) { 
-    if (confirm('Удалить рецепт?')) {
-        let recipes = JSON.parse(localStorage.getItem('recipes')) || [];
-        recipes = recipes.filter(r => r.id != id);
-        localStorage.setItem('recipes', JSON.stringify(recipes));
+function deleteRecipe(id) {
+    console.log('🔧 deleteRecipe called with id:', id);
+    
+    const recipes = JSON.parse(localStorage.getItem('povoarBimRecipes')) || [];
+    const recipe = recipes.find(r => r.id == id);
+    
+    if (!recipe) {
+        console.error('🔧 Recipe not found for deletion with id:', id);
+        showNotification('Рецепт не найден', 'error');
+        return;
+    }
+    
+    if (confirm(`Вы уверены, что хотите удалить рецепт "${recipe.name}"?`)) {
+        console.log('🔧 Deleting recipe:', recipe.name);
+        
+        let updatedRecipes = recipes.filter(r => r.id != id);
+        localStorage.setItem('povoarBimRecipes', JSON.stringify(updatedRecipes));
+        
+        // Также обновляем глобальный массив recipes
+        window.recipes = updatedRecipes;
+        
         loadRecipes();
         updateDashboardStats();
-        showNotification('Рецепт удален', 'success');
+        showNotification(`Рецепт "${recipe.name}" успешно удален`, 'success');
+        
+        console.log('🔧 Recipe deleted successfully');
     }
 }
 // ПОЛНЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ПРОИЗВОДСТВЕННЫМИ ЗАДАНИЯМИ
