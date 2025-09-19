@@ -848,6 +848,14 @@
                     </div>
                 </div>
 
+                <!-- Поле для заметок -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Примечания к заданию</label>
+                    <textarea id="production-notes" rows="3" 
+                              placeholder="Дополнительные инструкции, особенности производства..."
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"></textarea>
+                </div>
+
                 <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                     <button type="button" onclick="hideModal('production-task-modal')" 
                             class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
@@ -1430,8 +1438,24 @@ function loadProductionTasks() {
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                     <button onclick="viewProductionTask('${task.id}')" 
-                            class="text-blue-600 hover:text-blue-900">
+                            class="text-blue-600 hover:text-blue-900" title="Просмотр задания">
                         <i class="fas fa-eye"></i>
+                    </button>
+                    <button onclick="editProductionTask('${task.id}')" 
+                            class="text-green-600 hover:text-green-900" title="Редактировать задание">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="changeTaskStatus('${task.id}')" 
+                            class="text-orange-600 hover:text-orange-900" title="Изменить статус">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button onclick="deleteProductionTask('${task.id}')" 
+                            class="text-red-600 hover:text-red-900" title="Удалить задание">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button onclick="exportProductionTask('${task.id}')" 
+                            class="text-purple-600 hover:text-purple-900" title="Экспорт в Excel">
+                        <i class="fas fa-file-excel"></i>
                     </button>
                 </td>
             </tr>
@@ -1874,8 +1898,204 @@ function deleteRecipe(id) {
         showNotification('Рецепт удален', 'success');
     }
 }
-function viewProductionTask(id) { showNotification('Просмотр производственного задания', 'info'); }
-function exportProductionTask(id) { showNotification('Экспорт задания', 'info'); }
+// ПОЛНЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ПРОИЗВОДСТВЕННЫМИ ЗАДАНИЯМИ
+
+function viewProductionTask(id) {
+    const task = productionTasks.find(t => t.id === id);
+    if (!task) return;
+    
+    // Заполнение формы данными задания для просмотра
+    document.getElementById('production-task-id').value = task.id;
+    document.getElementById('production-recipe-select').value = task.recipeId;
+    document.getElementById('production-batch-size').value = task.batchSize;
+    document.getElementById('production-date').value = task.productionDate;
+    document.getElementById('production-batch-number').value = task.batchNumber;
+    document.getElementById('production-notes').value = task.notes || '';
+    
+    // Делаем поля только для чтения
+    const modal = document.getElementById('production-task-modal');
+    const inputs = modal.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => input.readOnly = true);
+    
+    // Скрываем кнопку сохранения
+    const saveBtn = modal.querySelector('button[type="submit"]');
+    if (saveBtn) saveBtn.style.display = 'none';
+    
+    // Меняем заголовок
+    const title = document.getElementById('production-task-modal-title');
+    if (title) title.textContent = `Просмотр задания ${task.batchNumber}`;
+    
+    showModal('production-task-modal', true);
+}
+
+function editProductionTask(id) {
+    const task = productionTasks.find(t => t.id === id);
+    if (!task) return;
+    
+    // Заполнение формы данными задания
+    document.getElementById('production-task-id').value = task.id;
+    document.getElementById('production-recipe-select').value = task.recipeId;
+    document.getElementById('production-batch-size').value = task.batchSize;
+    document.getElementById('production-date').value = task.productionDate;
+    document.getElementById('production-batch-number').value = task.batchNumber;
+    document.getElementById('production-notes').value = task.notes || '';
+    
+    // Восстанавливаем поля для редактирования
+    const modal = document.getElementById('production-task-modal');
+    const inputs = modal.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => input.readOnly = false);
+    
+    // Показываем кнопку сохранения
+    const saveBtn = modal.querySelector('button[type="submit"]');
+    if (saveBtn) saveBtn.style.display = 'inline-flex';
+    
+    // Меняем заголовок
+    const title = document.getElementById('production-task-modal-title');
+    if (title) title.textContent = `Редактировать задание ${task.batchNumber}`;
+    
+    // Обновляем расчеты
+    updateProductionCalculations();
+    
+    showModal('production-task-modal', true);
+}
+
+function deleteProductionTask(id) {
+    const task = productionTasks.find(t => t.id === id);
+    if (!task) return;
+    
+    if (confirm(`Вы уверены, что хотите удалить производственное задание ${task.batchNumber || task.id}?`)) {
+        // Удаляем из массива
+        const index = productionTasks.findIndex(t => t.id === id);
+        if (index !== -1) {
+            productionTasks.splice(index, 1);
+        }
+        
+        // Сохраняем в localStorage
+        localStorage.setItem('productionTasks', JSON.stringify(productionTasks));
+        
+        // Обновляем таблицу и статистику
+        loadProductionTasks();
+        updateDashboardStats();
+        
+        showNotification('Производственное задание удалено', 'success');
+    }
+}
+
+function changeTaskStatus(id) {
+    const task = productionTasks.find(t => t.id === id);
+    if (!task) return;
+    
+    const statuses = [
+        { value: 'draft', label: 'Черновик' },
+        { value: 'active', label: 'Активное' },
+        { value: 'in-production', label: 'В производстве' },
+        { value: 'completed', label: 'Завершено' },
+        { value: 'cancelled', label: 'Отменено' }
+    ];
+    
+    // Создаем диалог выбора статуса
+    const currentStatus = task.status || 'draft';
+    const statusOptions = statuses.map(s => 
+        `<option value="${s.value}" ${s.value === currentStatus ? 'selected' : ''}>${s.label}</option>`
+    ).join('');
+    
+    const newStatus = prompt(
+        `Текущий статус: ${statuses.find(s => s.value === currentStatus)?.label}
+        
+Введите номер нового статуса:
+1 - Черновик
+2 - Активное  
+3 - В производстве
+4 - Завершено
+5 - Отменено`,
+        currentStatus === 'draft' ? '1' : 
+        currentStatus === 'active' ? '2' :
+        currentStatus === 'in-production' ? '3' :
+        currentStatus === 'completed' ? '4' : '5'
+    );
+    
+    const statusMap = {
+        '1': 'draft',
+        '2': 'active', 
+        '3': 'in-production',
+        '4': 'completed',
+        '5': 'cancelled'
+    };
+    
+    if (newStatus && statusMap[newStatus]) {
+        task.status = statusMap[newStatus];
+        
+        // Сохраняем изменения
+        localStorage.setItem('productionTasks', JSON.stringify(productionTasks));
+        
+        // Обновляем таблицу
+        loadProductionTasks();
+        
+        const statusLabel = statuses.find(s => s.value === task.status)?.label;
+        showNotification(`Статус изменен на: ${statusLabel}`, 'success');
+    }
+}
+
+function exportProductionTask(id) {
+    const task = productionTasks.find(t => t.id === id);
+    if (!task) return;
+    
+    // Получаем рецепт для детализации
+    const recipe = recipes.find(r => r.id === task.recipeId);
+    
+    // Подготавливаем данные для Excel
+    const exportData = [
+        ['ПРОИЗВОДСТВЕННОЕ ЗАДАНИЕ'],
+        ['Номер партии:', task.batchNumber || task.id],
+        ['Рецепт:', task.recipeName || 'Неизвестный'],
+        ['Объем партии:', `${task.batchSize} кг`],
+        ['Дата производства:', task.productionDate ? new Date(task.productionDate).toLocaleDateString('ru-RU') : 'Не указана'],
+        ['Общая стоимость:', `${(task.totalCost || 0).toFixed(2)} ₽`],
+        ['Себестоимость за кг:', `${(task.costPerKg || 0).toFixed(2)} ₽/кг`],
+        ['Статус:', getProductionStatus(task).text],
+        [''],
+        ['СОСТАВ РЕЦЕПТА (на 1 кг):']
+    ];
+    
+    if (recipe && recipe.ingredients) {
+        exportData.push(['Ингредиент', 'Количество (г)', 'Стоимость (₽)']);
+        recipe.ingredients.forEach(ing => {
+            exportData.push([
+                ing.name || 'Неизвестный ингредиент',
+                `${ing.weight} г`,
+                `${(ing.cost || 0).toFixed(2)} ₽`
+            ]);
+        });
+        exportData.push(['']);
+        exportData.push(['ОБЩИЙ РАСЧЕТ НА ПАРТИЮ:']);
+        exportData.push(['Ингредиент', 'На партию (кг)', 'Стоимость (₽)']);
+        recipe.ingredients.forEach(ing => {
+            const totalWeight = (ing.weight / 1000) * task.batchSize;
+            const totalCost = ing.cost * task.batchSize;
+            exportData.push([
+                ing.name || 'Неизвестный ингредиент',
+                `${totalWeight.toFixed(3)} кг`,
+                `${totalCost.toFixed(2)} ₽`
+            ]);
+        });
+    }
+    
+    if (task.notes) {
+        exportData.push(['']);
+        exportData.push(['Примечания:', task.notes]);
+    }
+    
+    // Создаем Excel файл
+    const ws = XLSX.utils.aoa_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Производственное задание');
+    
+    // Скачиваем файл
+    const fileName = `zadanie-${task.batchNumber || task.id}-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    showNotification('Производственное задание экспортировано в Excel', 'success');
+}
 function clearIngredientFilters() { loadIngredients(); }
 function clearProductionFilters() { loadProductionTasks(); }
 function filterIngredients() { /* Фильтрация в разработке */ }
