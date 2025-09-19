@@ -725,14 +725,23 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Категория каши *</label>
-                        <select id="recipe-category" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="">Выберите категорию</option>
-                            <option value="говядина">Говядина</option>
-                            <option value="курица">Курица</option>
-                            <option value="лосось">Лосось</option>
-                            <option value="лайт">Лайт (диетическая)</option>
-                        </select>
+                        <div class="flex">
+                            <select id="recipe-category" required onchange="handleCategoryChange(this)"
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="">Выберите категорию</option>
+                                <option value="говядина">Говядина</option>
+                                <option value="курица">Курица</option>
+                                <option value="лосось">Лосось</option>
+                                <option value="лайт">Лайт (диетическая)</option>
+                                <option value="__new__">➕ Создать новую категорию...</option>
+                            </select>
+                            <button type="button" onclick="addNewCategory()" title="Создать новую категорию"
+                                    class="px-3 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <input type="text" id="new-category-input" placeholder="Введите название новой категории" 
+                               class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent hidden">
                     </div>
                 </div>
 
@@ -1033,6 +1042,18 @@ function showModal(modalId, skipReset = false) {
             clearRecipeIngredients();
             // Добавляем первую пустую строку ингредиента сразу при открытии
             addIngredientToRecipe();
+            
+            // Сброс заголовка для нового рецепта
+            const title = document.getElementById('recipe-modal-title');
+            if (title) title.textContent = 'Создать новый рецепт';
+            
+            // Показываем кнопку сохранения
+            const saveBtn = modal.querySelector('button[type="submit"]');
+            if (saveBtn) saveBtn.style.display = 'inline-flex';
+            
+            // Разблокируем все поля
+            const inputs = modal.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => input.readOnly = false);
         }
         if (modalId === 'ingredient-modal' && !skipReset) {
             console.log('🔧 Opening ingredient modal - this may affect recipe form!');
@@ -1373,11 +1394,15 @@ function loadRecipes() {
                         </button>
                         <div class="space-x-2">
                             <button onclick="editRecipe('${recipe.id}')" 
-                                    class="text-orange-600 hover:text-orange-900 text-sm">
+                                    class="text-orange-600 hover:text-orange-900 text-sm" title="Редактировать рецепт">
                                 <i class="fas fa-edit"></i>
                             </button>
+                            <button onclick="exportRecipeToExcel('${recipe.id}')" 
+                                    class="text-green-600 hover:text-green-900 text-sm" title="Экспорт в Excel">
+                                <i class="fas fa-file-excel"></i>
+                            </button>
                             <button onclick="deleteRecipe('${recipe.id}')" 
-                                    class="text-red-600 hover:text-red-900 text-sm">
+                                    class="text-red-600 hover:text-red-900 text-sm" title="Удалить рецепт">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -1959,6 +1984,132 @@ function deleteRecipe(id) {
         console.log('🔧 Recipe deleted successfully');
     }
 }
+
+// ФУНКЦИИ УПРАВЛЕНИЯ КАТЕГОРИЯМИ РЕЦЕПТОВ
+function handleCategoryChange(select) {
+    const newCategoryInput = document.getElementById('new-category-input');
+    
+    if (select.value === '__new__') {
+        newCategoryInput.classList.remove('hidden');
+        newCategoryInput.focus();
+        newCategoryInput.required = true;
+        select.required = false;
+    } else {
+        newCategoryInput.classList.add('hidden');
+        newCategoryInput.required = false;
+        newCategoryInput.value = '';
+        select.required = true;
+    }
+}
+
+function addNewCategory() {
+    const categoryName = prompt('Введите название новой категории каши:');
+    
+    if (categoryName && categoryName.trim()) {
+        const cleanName = categoryName.trim().toLowerCase();
+        const displayName = categoryName.trim();
+        
+        // Проверяем, что такой категории еще нет
+        const categorySelect = document.getElementById('recipe-category');
+        const existingOptions = Array.from(categorySelect.options).map(opt => opt.value);
+        
+        if (existingOptions.includes(cleanName)) {
+            showNotification('Такая категория уже существует', 'warning');
+            return;
+        }
+        
+        // Добавляем новую опцию перед "Создать новую категорию"
+        const newOption = document.createElement('option');
+        newOption.value = cleanName;
+        newOption.textContent = displayName;
+        
+        const createNewOption = categorySelect.querySelector('option[value="__new__"]');
+        categorySelect.insertBefore(newOption, createNewOption);
+        
+        // Выбираем новую категорию
+        categorySelect.value = cleanName;
+        
+        showNotification(`Категория "${displayName}" добавлена`, 'success');
+    }
+}
+
+// ФУНКЦИЯ ЭКСПОРТА РЕЦЕПТА В EXCEL
+function exportRecipeToExcel(id) {
+    console.log('🔧 exportRecipeToExcel called with id:', id);
+    
+    const recipes = JSON.parse(localStorage.getItem('povoarBimRecipes')) || [];
+    const recipe = recipes.find(r => r.id == id);
+    
+    if (!recipe) {
+        console.error('🔧 Recipe not found for export with id:', id);
+        showNotification('Рецепт не найден', 'error');
+        return;
+    }
+    
+    // Подготавливаем данные для Excel
+    const exportData = [
+        [`РЕЦЕПТ КАШИ "ПОВАР БИМ"`],
+        [''],
+        ['Название рецепта:', recipe.name || 'Без названия'],
+        ['Категория:', recipe.category || 'Не указана'],
+        ['Описание:', recipe.description || 'Нет описания'],
+        ['Общий вес (1 кг):', `${recipe.totalWeight || 0} г`],
+        ['Себестоимость (1 кг):', `${(recipe.totalCost || 0).toFixed(2)} ₽`],
+        ['Дата создания:', recipe.createdAt ? new Date(recipe.createdAt).toLocaleDateString('ru-RU') : 'Не указана'],
+        [''],
+        ['СОСТАВ РЕЦЕПТА (на 1 кг):'],
+        ['№', 'Ингредиент', 'Количество (г)', 'Цена за кг (₽)', 'Стоимость (₽)']
+    ];
+    
+    if (recipe.ingredients && recipe.ingredients.length > 0) {
+        recipe.ingredients.forEach((ingredient, index) => {
+            exportData.push([
+                index + 1,
+                ingredient.name || 'Неизвестный ингредиент',
+                `${ingredient.weight || 0} г`,
+                `${(ingredient.price || 0).toFixed(2)} ₽`,
+                `${(ingredient.cost || 0).toFixed(2)} ₽`
+            ]);
+        });
+        
+        exportData.push(['']);
+        exportData.push(['ИТОГО:', '', `${recipe.totalWeight || 0} г`, '', `${(recipe.totalCost || 0).toFixed(2)} ₽`]);
+    } else {
+        exportData.push(['Ингредиенты не добавлены']);
+    }
+    
+    // Добавляем информацию о пищевой ценности (если нужно)
+    exportData.push(['']);
+    exportData.push(['ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ:']);
+    exportData.push(['Цена за 100г:', `${((recipe.totalCost || 0) / 10).toFixed(2)} ₽`]);
+    exportData.push(['Расчет производства на 10 кг:', `${((recipe.totalCost || 0) * 10).toFixed(2)} ₽`]);
+    exportData.push(['Расчет производства на 50 кг:', `${((recipe.totalCost || 0) * 50).toFixed(2)} ₽`]);
+    exportData.push(['Расчет производства на 100 кг:', `${((recipe.totalCost || 0) * 100).toFixed(2)} ₽`]);
+    
+    // Создаем Excel файл
+    const ws = XLSX.utils.aoa_to_sheet(exportData);
+    
+    // Настраиваем ширину колонок
+    const colWidths = [
+        { wch: 5 },  // №
+        { wch: 30 }, // Ингредиент
+        { wch: 15 }, // Количество
+        { wch: 15 }, // Цена
+        { wch: 15 }  // Стоимость
+    ];
+    ws['!cols'] = colWidths;
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Рецепт');
+    
+    // Скачиваем файл
+    const fileName = `recept-${recipe.name?.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_') || 'recipe'}-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    showNotification(`Рецепт "${recipe.name}" экспортирован в Excel`, 'success');
+    console.log('🔧 Recipe exported successfully');
+}
+
 // ПОЛНЫЕ ФУНКЦИИ УПРАВЛЕНИЯ ПРОИЗВОДСТВЕННЫМИ ЗАДАНИЯМИ
 
 function viewProductionTask(id) {
