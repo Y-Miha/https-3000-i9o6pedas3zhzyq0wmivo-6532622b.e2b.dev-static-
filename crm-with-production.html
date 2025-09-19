@@ -1000,22 +1000,24 @@ function showSection(sectionName) {
 }
 
 // Функции управления модальными окнами
-function showModal(modalId) {
+function showModal(modalId, skipReset = false) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.add('show');
         
-        // Сброс формы при открытии модального окна
-        const form = modal.querySelector('form');
-        if (form) {
-            form.reset();
-            // Очистка скрытых полей ID
-            const idField = form.querySelector('input[type="hidden"]');
-            if (idField) idField.value = '';
+        // Сброс формы только если не редактируем
+        if (!skipReset) {
+            const form = modal.querySelector('form');
+            if (form) {
+                form.reset();
+                // Очистка скрытых полей ID
+                const idField = form.querySelector('input[type="hidden"]');
+                if (idField) idField.value = '';
+            }
         }
 
         // Специфическая инициализация для разных модальных окон
-        if (modalId === 'recipe-modal') {
+        if (modalId === 'recipe-modal' && !skipReset) {
             clearRecipeIngredients();
         }
         if (modalId === 'production-task-modal') {
@@ -1527,6 +1529,48 @@ function removeIngredientFromRecipe(ingredientId) {
     }
 }
 
+// Функция для добавления ингредиента с конкретными значениями (для редактирования)
+function addRecipeIngredient(ingredientId, weight) {
+    const ingredientsContainer = document.getElementById('recipe-ingredients');
+    const rowId = `recipe-ingredient-${Date.now()}`;
+
+    const ingredientRow = `
+        <div class="ingredient-row" data-id="${rowId}">
+            <div class="flex items-center space-x-4">
+                <div class="flex-1">
+                    <select class="ingredient-select w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                            onchange="updateRecipeCalculations()">
+                        <option value="">Выберите ингредиент</option>
+                        ${ingredients.map(ing => `
+                            <option value="${ing.id}" data-price="${ing.price}" data-stock="${ing.stock}" 
+                                    ${ing.id === ingredientId ? 'selected' : ''}>
+                                ${ing.name} (${ing.stock} кг на складе, ${ing.price} ₽/кг)
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="w-32">
+                    <input type="number" step="0.1" min="0" placeholder="Вес (г)" 
+                           class="ingredient-weight w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                           value="${weight || ''}"
+                           onchange="updateRecipeCalculations()">
+                </div>
+                <div class="w-24 text-sm text-gray-600 text-center">
+                    <span class="ingredient-cost">0 ₽</span>
+                </div>
+                <button type="button" onclick="removeIngredientFromRecipe('${rowId}')" 
+                        class="text-red-600 hover:text-red-800">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+
+    if (ingredientsContainer) {
+        ingredientsContainer.innerHTML += ingredientRow;
+    }
+}
+
 function updateRecipeCalculations() {
     const ingredientRows = document.querySelectorAll('.ingredient-row');
     let totalWeight = 0;
@@ -1686,13 +1730,80 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Заглушки для функций
-function viewRecipe(id) { showNotification('Просмотр рецепта', 'info'); }
-function editRecipe(id) { showNotification('Редактирование рецепта', 'info'); }
+// Функции работы с рецептами
+function viewRecipe(id) {
+    const recipes = JSON.parse(localStorage.getItem('recipes')) || [];
+    const recipe = recipes.find(r => r.id == id);
+    if (!recipe) return;
+    
+    // Заполнение модального окна данными для просмотра только для чтения
+    document.getElementById('recipe-name').value = recipe.name;
+    document.getElementById('recipe-category').value = recipe.category;
+    document.getElementById('recipe-description').value = recipe.description || '';
+    
+    // Загрузка ингредиентов рецепта
+    clearRecipeIngredients();
+    recipe.ingredients.forEach((ingredient, index) => {
+        if (index === 0) {
+            document.getElementById('recipe-ingredient').value = ingredient.id;
+            document.getElementById('recipe-weight').value = ingredient.weight;
+        } else {
+            addRecipeIngredient(ingredient.id, ingredient.weight);
+        }
+    });
+    
+    // Делаем поля только для чтения
+    const modal = document.getElementById('recipe-modal');
+    const inputs = modal.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => input.readOnly = true);
+    
+    // Скрываем кнопку сохранения
+    const saveBtn = modal.querySelector('button[type="submit"]');
+    if (saveBtn) saveBtn.style.display = 'none';
+    
+    showModal('recipe-modal', true);
+}
+
+function editRecipe(id) {
+    const recipes = JSON.parse(localStorage.getItem('recipes')) || [];
+    const recipe = recipes.find(r => r.id == id);
+    if (!recipe) return;
+    
+    // Заполнение формы данными рецепта
+    document.getElementById('recipe-id').value = recipe.id;
+    document.getElementById('recipe-name').value = recipe.name;
+    document.getElementById('recipe-category').value = recipe.category;
+    document.getElementById('recipe-description').value = recipe.description || '';
+    
+    // Очистка и загрузка ингредиентов
+    clearRecipeIngredients();
+    recipe.ingredients.forEach((ingredient, index) => {
+        if (index === 0) {
+            document.getElementById('recipe-ingredient').value = ingredient.id;
+            document.getElementById('recipe-weight').value = ingredient.weight;
+        } else {
+            addRecipeIngredient(ingredient.id, ingredient.weight);
+        }
+    });
+    
+    // Восстанавливаем поля для редактирования
+    const modal = document.getElementById('recipe-modal');
+    const inputs = modal.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => input.readOnly = false);
+    
+    // Показываем кнопку сохранения
+    const saveBtn = modal.querySelector('button[type="submit"]');
+    if (saveBtn) saveBtn.style.display = 'inline-flex';
+    
+    updateRecipeCalculations();
+    showModal('recipe-modal', true);
+}
+
 function deleteRecipe(id) { 
     if (confirm('Удалить рецепт?')) {
-        recipes = recipes.filter(r => r.id !== id);
-        saveDataToStorage();
+        let recipes = JSON.parse(localStorage.getItem('recipes')) || [];
+        recipes = recipes.filter(r => r.id != id);
+        localStorage.setItem('recipes', JSON.stringify(recipes));
         loadRecipes();
         updateDashboardStats();
         showNotification('Рецепт удален', 'success');
