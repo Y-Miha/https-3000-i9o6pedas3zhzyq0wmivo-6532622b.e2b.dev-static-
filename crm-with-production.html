@@ -1023,6 +1023,8 @@ function showModal(modalId, skipReset = false) {
         if (modalId === 'recipe-modal' && !skipReset) {
             console.log('🔧 Clearing recipe ingredients for recipe modal');
             clearRecipeIngredients();
+            // Добавляем первую пустую строку ингредиента сразу при открытии
+            addIngredientToRecipe();
         }
         if (modalId === 'ingredient-modal' && !skipReset) {
             console.log('🔧 Opening ingredient modal - this may affect recipe form!');
@@ -1767,15 +1769,10 @@ function viewRecipe(id) {
     document.getElementById('recipe-category').value = recipe.category;
     document.getElementById('recipe-description').value = recipe.description || '';
     
-    // Загрузка ингредиентов рецепта
+    // Очистка и загрузка ингредиентов рецепта
     clearRecipeIngredients();
-    recipe.ingredients.forEach((ingredient, index) => {
-        if (index === 0) {
-            document.getElementById('recipe-ingredient').value = ingredient.id;
-            document.getElementById('recipe-weight').value = ingredient.weight;
-        } else {
-            addRecipeIngredient(ingredient.id, ingredient.weight);
-        }
+    recipe.ingredients.forEach((ingredient) => {
+        addRecipeIngredient(ingredient.ingredientId || ingredient.id, ingredient.weight);
     });
     
     // Делаем поля только для чтения
@@ -1801,15 +1798,12 @@ function editRecipe(id) {
     document.getElementById('recipe-category').value = recipe.category;
     document.getElementById('recipe-description').value = recipe.description || '';
     
-    // Очистка и загрузка ингредиентов
+    // Очистка ингредиентов
     clearRecipeIngredients();
-    recipe.ingredients.forEach((ingredient, index) => {
-        if (index === 0) {
-            document.getElementById('recipe-ingredient').value = ingredient.id;
-            document.getElementById('recipe-weight').value = ingredient.weight;
-        } else {
-            addRecipeIngredient(ingredient.id, ingredient.weight);
-        }
+    
+    // Загрузка всех ингредиентов рецепта
+    recipe.ingredients.forEach((ingredient) => {
+        addRecipeIngredient(ingredient.ingredientId || ingredient.id, ingredient.weight);
     });
     
     // Восстанавливаем поля для редактирования
