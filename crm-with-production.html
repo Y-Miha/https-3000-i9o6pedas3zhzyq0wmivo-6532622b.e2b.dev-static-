@@ -1001,6 +1001,8 @@ function showSection(sectionName) {
 
 // Функции управления модальными окнами
 function showModal(modalId, skipReset = false) {
+    console.log('🔧 showModal called:', modalId, 'skipReset:', skipReset);
+    
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.add('show');
@@ -1009,6 +1011,7 @@ function showModal(modalId, skipReset = false) {
         if (!skipReset) {
             const form = modal.querySelector('form');
             if (form) {
+                console.log('🔧 Resetting form for modal:', modalId);
                 form.reset();
                 // Очистка скрытых полей ID
                 const idField = form.querySelector('input[type="hidden"]');
@@ -1018,7 +1021,11 @@ function showModal(modalId, skipReset = false) {
 
         // Специфическая инициализация для разных модальных окон
         if (modalId === 'recipe-modal' && !skipReset) {
+            console.log('🔧 Clearing recipe ingredients for recipe modal');
             clearRecipeIngredients();
+        }
+        if (modalId === 'ingredient-modal' && !skipReset) {
+            console.log('🔧 Opening ingredient modal - this may affect recipe form!');
         }
         if (modalId === 'production-task-modal') {
             loadRecipesForProduction();
@@ -1475,16 +1482,34 @@ function clearRecipeIngredients() {
         container.innerHTML = '';
     }
     updateRecipeCalculations();
+    
+    // Автоматически добавляем первое поле ингредиента
+    setTimeout(() => {
+        addIngredientToRecipe();
+    }, 100);
 }
 
 function addIngredientToRecipe() {
+    console.log('🔧 addIngredientToRecipe called, ingredients count:', ingredients.length);
+    
     if (ingredients.length === 0) {
-        alert('Сначала добавьте ингредиенты в систему');
-        return;
+        // Вместо alert предлагаем создать ингредиент
+        if (confirm('У вас нет ингредиентов в системе. Создать первый ингредиент?')) {
+            showModal('ingredient-modal');
+            return;
+        } else {
+            return;
+        }
     }
 
     const ingredientsContainer = document.getElementById('recipe-ingredients');
     const ingredientId = `recipe-ingredient-${Date.now()}`;
+
+    console.log('🔧 Adding ingredient row, container found:', !!ingredientsContainer);
+
+    // Проверяем, есть ли уже заполненные поля, которые можно сохранить
+    const existingRows = ingredientsContainer.querySelectorAll('.ingredient-row');
+    console.log('🔧 Existing rows count:', existingRows.length);
 
     const ingredientRow = `
         <div class="ingredient-row" data-id="${ingredientId}">
@@ -1518,6 +1543,7 @@ function addIngredientToRecipe() {
 
     if (ingredientsContainer) {
         ingredientsContainer.innerHTML += ingredientRow;
+        console.log('🔧 Ingredient row added successfully, total rows now:', ingredientsContainer.querySelectorAll('.ingredient-row').length);
     }
 }
 
