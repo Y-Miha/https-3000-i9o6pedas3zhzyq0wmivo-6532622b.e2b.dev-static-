@@ -1505,13 +1505,30 @@ function addIngredientToRecipe() {
     }
 
     const ingredientsContainer = document.getElementById('recipe-ingredients');
-    const ingredientId = `recipe-ingredient-${Date.now()}`;
-
-    console.log('🔧 Adding ingredient row, container found:', !!ingredientsContainer);
-
-    // Проверяем, есть ли уже заполненные поля, которые можно сохранить
+    
+    // КРИТИЧЕСКИЙ FIX: Сохраняем данные всех существующих строк
     const existingRows = ingredientsContainer.querySelectorAll('.ingredient-row');
+    const savedData = [];
+    
     console.log('🔧 Existing rows count:', existingRows.length);
+    
+    // Сохраняем данные каждой строки
+    existingRows.forEach((row, index) => {
+        const select = row.querySelector('.ingredient-select');
+        const weightInput = row.querySelector('.ingredient-weight');
+        const costSpan = row.querySelector('.ingredient-cost');
+        
+        const data = {
+            ingredientId: select ? select.value : '',
+            weight: weightInput ? weightInput.value : '',
+            cost: costSpan ? costSpan.textContent : '0 ₽'
+        };
+        
+        savedData.push(data);
+        console.log(`🔧 SAVED row ${index}:`, data);
+    });
+
+    const ingredientId = `recipe-ingredient-${Date.now()}`;
 
     const ingredientRow = `
         <div class="ingredient-row" data-id="${ingredientId}">
@@ -1545,7 +1562,35 @@ function addIngredientToRecipe() {
 
     if (ingredientsContainer) {
         ingredientsContainer.innerHTML += ingredientRow;
-        console.log('🔧 Ingredient row added successfully, total rows now:', ingredientsContainer.querySelectorAll('.ingredient-row').length);
+        
+        // КРИТИЧЕСКИЙ FIX: Восстанавливаем сохраненные данные
+        const newRows = ingredientsContainer.querySelectorAll('.ingredient-row');
+        console.log('🔧 New rows count after adding:', newRows.length);
+        
+        savedData.forEach((data, index) => {
+            if (newRows[index]) {
+                const select = newRows[index].querySelector('.ingredient-select');
+                const weightInput = newRows[index].querySelector('.ingredient-weight');
+                const costSpan = newRows[index].querySelector('.ingredient-cost');
+                
+                if (select && data.ingredientId) {
+                    select.value = data.ingredientId;
+                    console.log(`🔧 RESTORED select ${index}:`, data.ingredientId);
+                }
+                if (weightInput && data.weight) {
+                    weightInput.value = data.weight;
+                    console.log(`🔧 RESTORED weight ${index}:`, data.weight);
+                }
+                if (costSpan && data.cost) {
+                    costSpan.textContent = data.cost;
+                    console.log(`🔧 RESTORED cost ${index}:`, data.cost);
+                }
+            }
+        });
+        
+        // Пересчитываем итоги после восстановления данных
+        setTimeout(() => updateRecipeCalculations(), 100);
+        console.log('🔧 ✅ DATA RESTORATION COMPLETED');
     }
 }
 
