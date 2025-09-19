@@ -726,22 +726,24 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Категория каши *</label>
                         <div class="flex">
-                            <select id="recipe-category" required onchange="handleCategoryChange(this)"
+                            <select id="recipe-category" required 
                                     class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                                 <option value="">Выберите категорию</option>
                                 <option value="говядина">Говядина</option>
                                 <option value="курица">Курица</option>
                                 <option value="лосось">Лосось</option>
                                 <option value="лайт">Лайт (диетическая)</option>
-                                <option value="__new__">➕ Создать новую категорию...</option>
                             </select>
-                            <button type="button" onclick="addNewCategory()" title="Создать новую категорию"
-                                    class="px-3 py-2 bg-blue-600 text-white rounded-r-lg hover:bg-blue-700">
+                            <button type="button" onclick="addNewCategory()" title="Добавить новую категорию"
+                                    class="px-3 py-2 bg-green-600 text-white hover:bg-green-700">
                                 <i class="fas fa-plus"></i>
                             </button>
+                            <button type="button" onclick="manageCategoriesModal()" title="Управление категориями"
+                                    class="px-3 py-2 bg-orange-600 text-white rounded-r-lg hover:bg-orange-700">
+                                <i class="fas fa-cog"></i>
+                            </button>
                         </div>
-                        <input type="text" id="new-category-input" placeholder="Введите название новой категории" 
-                               class="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent hidden">
+                        <p class="text-xs text-gray-500 mt-1">Используйте <i class="fas fa-plus text-green-600"></i> для добавления, <i class="fas fa-cog text-orange-600"></i> для управления категориями</p>
                     </div>
                 </div>
 
@@ -801,6 +803,47 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления категориями -->
+    <div id="categories-modal" class="modal fixed inset-0 z-50 items-center justify-center">
+        <div class="modal-container bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-tags text-orange-600 mr-2"></i>
+                    <span>Управление категориями каш</span>
+                </h3>
+                <button onclick="hideModal('categories-modal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Существующие категории:</label>
+                <div id="categories-list" class="space-y-2 max-h-60 overflow-y-auto">
+                    <!-- Список категорий будет здесь -->
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Добавить новую категорию:</label>
+                <div class="flex">
+                    <input type="text" id="new-category-name" placeholder="Название категории (например: Индейка)"
+                           class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <button onclick="addCategoryFromModal()" 
+                            class="px-3 py-2 bg-green-600 text-white rounded-r-lg hover:bg-green-700">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                <button onclick="hideModal('categories-modal')" 
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md">
+                    Закрыть
+                </button>
+            </div>
         </div>
     </div>
 
@@ -961,6 +1004,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateCurrentTime, 1000);
     showSection('dashboard');
     updateDashboardStats();
+    
+    // Инициализируем категории
+    updateCategorySelect();
 });
 
 // Обновление времени
@@ -1986,19 +2032,48 @@ function deleteRecipe(id) {
 }
 
 // ФУНКЦИИ УПРАВЛЕНИЯ КАТЕГОРИЯМИ РЕЦЕПТОВ
-function handleCategoryChange(select) {
-    const newCategoryInput = document.getElementById('new-category-input');
+let customCategories = JSON.parse(localStorage.getItem('povoarBimCategories')) || [];
+
+function getDefaultCategories() {
+    return [
+        { value: 'говядина', name: 'Говядина', default: true },
+        { value: 'курица', name: 'Курица', default: true },
+        { value: 'лосось', name: 'Лосось', default: true },
+        { value: 'лайт', name: 'Лайт (диетическая)', default: true }
+    ];
+}
+
+function getAllCategories() {
+    const defaultCategories = getDefaultCategories();
+    const allCategories = [...defaultCategories, ...customCategories];
+    return allCategories;
+}
+
+function saveCategoriesState() {
+    localStorage.setItem('povoarBimCategories', JSON.stringify(customCategories));
+}
+
+function updateCategorySelect() {
+    const categorySelect = document.getElementById('recipe-category');
+    if (!categorySelect) return;
     
-    if (select.value === '__new__') {
-        newCategoryInput.classList.remove('hidden');
-        newCategoryInput.focus();
-        newCategoryInput.required = true;
-        select.required = false;
-    } else {
-        newCategoryInput.classList.add('hidden');
-        newCategoryInput.required = false;
-        newCategoryInput.value = '';
-        select.required = true;
+    const selectedValue = categorySelect.value;
+    const categories = getAllCategories();
+    
+    // Очищаем select кроме первой опции
+    categorySelect.innerHTML = '<option value="">Выберите категорию</option>';
+    
+    // Добавляем все категории
+    categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat.value;
+        option.textContent = cat.name;
+        categorySelect.appendChild(option);
+    });
+    
+    // Восстанавливаем выбранное значение
+    if (selectedValue) {
+        categorySelect.value = selectedValue;
     }
 }
 
@@ -2010,26 +2085,121 @@ function addNewCategory() {
         const displayName = categoryName.trim();
         
         // Проверяем, что такой категории еще нет
-        const categorySelect = document.getElementById('recipe-category');
-        const existingOptions = Array.from(categorySelect.options).map(opt => opt.value);
+        const allCategories = getAllCategories();
+        const exists = allCategories.some(cat => cat.value === cleanName);
         
-        if (existingOptions.includes(cleanName)) {
+        if (exists) {
             showNotification('Такая категория уже существует', 'warning');
             return;
         }
         
-        // Добавляем новую опцию перед "Создать новую категорию"
-        const newOption = document.createElement('option');
-        newOption.value = cleanName;
-        newOption.textContent = displayName;
+        // Добавляем в массив пользовательских категорий
+        customCategories.push({
+            value: cleanName,
+            name: displayName,
+            default: false
+        });
         
-        const createNewOption = categorySelect.querySelector('option[value="__new__"]');
-        categorySelect.insertBefore(newOption, createNewOption);
+        saveCategoriesState();
+        updateCategorySelect();
         
         // Выбираем новую категорию
+        const categorySelect = document.getElementById('recipe-category');
         categorySelect.value = cleanName;
         
         showNotification(`Категория "${displayName}" добавлена`, 'success');
+    }
+}
+
+function manageCategoriesModal() {
+    loadCategoriesList();
+    showModal('categories-modal');
+}
+
+function loadCategoriesList() {
+    const categoriesList = document.getElementById('categories-list');
+    if (!categoriesList) return;
+    
+    const allCategories = getAllCategories();
+    
+    categoriesList.innerHTML = '';
+    
+    allCategories.forEach(category => {
+        const categoryItem = document.createElement('div');
+        categoryItem.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-md';
+        
+        const canDelete = !category.default; // Можно удалять только пользовательские
+        
+        categoryItem.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas ${category.default ? 'fa-tag' : 'fa-user-tag'} text-blue-600 mr-2"></i>
+                <span class="text-sm font-medium">${category.name}</span>
+                ${category.default ? '<span class="ml-2 text-xs text-gray-500">(по умолчанию)</span>' : ''}
+            </div>
+            <div>
+                ${canDelete ? `
+                    <button onclick="deleteCategory('${category.value}')" 
+                            class="text-red-600 hover:text-red-900 text-sm" title="Удалить категорию">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : `
+                    <span class="text-xs text-gray-400">системная</span>
+                `}
+            </div>
+        `;
+        
+        categoriesList.appendChild(categoryItem);
+    });
+}
+
+function addCategoryFromModal() {
+    const input = document.getElementById('new-category-name');
+    const categoryName = input.value.trim();
+    
+    if (!categoryName) {
+        showNotification('Введите название категории', 'warning');
+        return;
+    }
+    
+    const cleanName = categoryName.toLowerCase();
+    const allCategories = getAllCategories();
+    const exists = allCategories.some(cat => cat.value === cleanName);
+    
+    if (exists) {
+        showNotification('Такая категория уже существует', 'warning');
+        return;
+    }
+    
+    // Добавляем новую категорию
+    customCategories.push({
+        value: cleanName,
+        name: categoryName,
+        default: false
+    });
+    
+    saveCategoriesState();
+    updateCategorySelect();
+    loadCategoriesList();
+    
+    // Очищаем поле ввода
+    input.value = '';
+    
+    showNotification(`Категория "${categoryName}" добавлена`, 'success');
+}
+
+function deleteCategory(categoryValue) {
+    const category = customCategories.find(cat => cat.value === categoryValue);
+    if (!category) return;
+    
+    if (confirm(`Удалить категорию "${category.name}"?`)) {
+        // Удаляем из массива
+        customCategories = customCategories.filter(cat => cat.value !== categoryValue);
+        
+        saveCategoriesState();
+        updateCategorySelect();
+        loadCategoriesList();
+        
+        showNotification(`Категория "${category.name}" удалена`, 'success');
     }
 }
 
